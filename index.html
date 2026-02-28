@@ -773,14 +773,35 @@
 
   /* Active turn row highlight */
   .pit-row.active-turn {
-    background: rgba(255,255,255,0.02);
-    border-radius: 36px;
-    box-shadow: 0 0 15px rgba(255,255,255,0.05), inset 0 0 10px rgba(255,255,255,0.02);
-    animation: rowPulse 3s ease-in-out infinite;
+    border-radius: 40px;
+    position: relative;
+    z-index: 1;
   }
-  @keyframes rowPulse {
-    0%, 100% { box-shadow: 0 0 15px rgba(255,255,255,0.05); }
-    50% { box-shadow: 0 0 25px rgba(255,255,255,0.1), inset 0 0 15px rgba(255,255,255,0.04); }
+  
+  #rowPlayer.active-turn {
+    background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.05), transparent);
+    box-shadow: 
+      0 0 30px rgba(56, 189, 248, 0.2), 
+      inset 0 0 20px rgba(56, 189, 248, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    animation: playerRowPulse 2s ease-in-out infinite;
+  }
+  @keyframes playerRowPulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.2); }
+    50% { box-shadow: 0 0 45px rgba(56, 189, 248, 0.4), inset 0 0 30px rgba(56, 189, 248, 0.2); border-color: rgba(56, 189, 248, 0.7); }
+  }
+
+  #rowOpponent.active-turn {
+    background: linear-gradient(90deg, transparent, rgba(244, 63, 94, 0.05), transparent);
+    box-shadow: 
+      0 0 30px rgba(244, 63, 94, 0.2), 
+      inset 0 0 20px rgba(244, 63, 94, 0.15);
+    border: 1px solid rgba(244, 63, 94, 0.4);
+    animation: oppRowPulse 2s ease-in-out infinite;
+  }
+  @keyframes oppRowPulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(244, 63, 94, 0.1); border-color: rgba(244, 63, 94, 0.2); }
+    50% { box-shadow: 0 0 45px rgba(244, 63, 94, 0.4), inset 0 0 30px rgba(244, 63, 94, 0.2); border-color: rgba(244, 63, 94, 0.7); }
   }
 
   /* Dead pit (not filled at round start — skipped during distribution) */
@@ -1882,12 +1903,29 @@ function minimax(boardState, scoresState, depth, alpha, beta, isMaximizing) {
   const moves = getValidMoves(boardState, currentSide);
 
   if (depth === 0 || moves.length === 0) {
-    // Primary score: difference in captured grains
-    let evalVal = (scoresState.opp - scoresState.player) * 5;
+    // Primary score: difference in captured grains (heavy weight)
+    let evalVal = (scoresState.opp - scoresState.player) * 10;
 
-    // Board Control: +1 per grain on side (weight increased)
+    // Board Control: total grains remaining on each side
     const oppBoard = boardState.opp.reduce((a, b) => a + b, 0);
     const playerBoard = boardState.player.reduce((a, b) => a + b, 0);
+    
+    // Starvation Tactics: Force opponent to skip a turn
+    if (playerBoard === 0 && oppBoard > 0) evalVal += 50;
+
+    // Vulnerability Penalty (AI leaves 3 grains -> easy Instant-4 target for player)
+    let aiVulnerable = 0;
+    for (let i = 0; i < PITS_PER_SIDE; i++) {
+      if (boardState.opp[i] === 3) aiVulnerable++;
+    }
+    evalVal -= (aiVulnerable * 15);
+
+    // Attack Bonus (Player leaves 3 grains -> easy Instinct-4 target for AI)
+    let playerVulnerable = 0;
+    for (let i = 0; i < PITS_PER_SIDE; i++) {
+      if (boardState.player[i] === 3) playerVulnerable++;
+    }
+    evalVal += (playerVulnerable * 10);
     
     evalVal += oppBoard;
     evalVal -= playerBoard;
@@ -1922,18 +1960,40 @@ function getBestAiMove() {
   const moves = getValidMoves(board, 'opp');
   if (moves.length === 0) return -1;
 
-  let bestMove = moves[0];
+  let bestMoves = [];
   let bestScore = -Infinity;
 
   for (const move of moves) {
     const result = executeTurnSim(board, scores, 'opp', move);
+    // Depth changes based on difficulty (Easy=1, Medium=3, Hard=7)
     const score = minimax(result.board, result.scores, aiDepth - 1, -Infinity, Infinity, false);
+    
     if (score > bestScore) {
       bestScore = score;
-      bestMove = move;
+      bestMoves = [move];
+    } else if (score === bestScore) {
+      // Loop Prevention: track ties
+      bestMoves.push(move);
     }
   }
-  return bestMove;
+
+  // Pick randomly from all mathematically tied "best" moves so games are unique
+  let chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+
+  // Controlled Randomness (Human Error) for Easy and Medium
+  if (aiDepth < 7 && moves.length > 1) {
+    // 30% error on Easy, 10% on Medium
+    const errorChance = aiDepth === 1 ? 0.3 : 0.1; 
+    if (Math.random() < errorChance) {
+      // Select a totally different valid move
+      const otherMoves = moves.filter(m => !bestMoves.includes(m));
+      if (otherMoves.length > 0) {
+        chosenMove = otherMoves[Math.floor(Math.random() * otherMoves.length)];
+      }
+    }
+  }
+
+  return chosenMove;
 }
 
 // ═══════════════════════════════════════════════

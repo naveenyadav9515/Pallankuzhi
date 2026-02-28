@@ -247,6 +247,89 @@
   .board-score-card.player .score-value { color: var(--player-accent); }
   .board-score-card.opponent .score-value { color: var(--opponent-accent); }
 
+  /* ── PREMIUM AI THINKING LOADER ───────────────── */
+  .premium-ai-thinker {
+    position: absolute;
+    /* Exactly match the opponent's 'In Hand' orb position */
+    bottom: auto;
+    top: -15px; left: 50%;
+    transform: translateX(-50%) translateY(-100%) scale(0.85);
+
+    background: rgba(12, 9, 20, 0.85);
+    border: 1px solid rgba(244, 63, 94, 0.5);
+    border-radius: 42px;
+    padding: 12px 30px;
+    display: flex; align-items: center; gap: 15px;
+    box-shadow: 
+      0 0 30px rgba(244, 63, 94, 0.3),
+      inset 0 0 15px rgba(244, 63, 94, 0.1);
+    backdrop-filter: blur(20px);
+    z-index: 50;
+    opacity: 0; pointer-events: none;
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  
+  body.ai-thinking .premium-ai-thinker {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-100%) scale(1);
+  }
+  
+  @media (max-width: 850px) {
+    .premium-ai-thinker {
+      top: auto;
+      bottom: calc(100% + 40px);
+      transform: translateX(-50%) scale(0.85);
+    }
+    body.ai-thinking .premium-ai-thinker {
+      transform: translateX(-50%) scale(1);
+    }
+  }
+
+  .thinker-text {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.2rem; font-weight: 800;
+    color: var(--opponent-accent);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    animation: textPulse 1.5s infinite alternate;
+  }
+  
+  @keyframes textPulse {
+    0% { opacity: 0.6; text-shadow: 0 0 10px rgba(244, 63, 94, 0); }
+    100% { opacity: 1; text-shadow: 0 0 15px rgba(244, 63, 94, 0.8); }
+  }
+
+  .thinker-rings {
+    position: relative;
+    width: 24px; height: 24px;
+  }
+  .thinker-rings::before, .thinker-rings::after {
+    content: ''; position: absolute; inset: 0;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: var(--opponent-accent);
+    border-bottom-color: var(--opponent-accent);
+    animation: doubleSpin 1.5s linear infinite;
+  }
+  .thinker-rings::after {
+    border: 2px solid transparent;
+    border-left-color: rgba(251, 191, 36, 0.8); /* Gold accent */
+    border-right-color: rgba(251, 191, 36, 0.8);
+    animation: doubleSpin 1s linear infinite reverse;
+  }
+  @keyframes doubleSpin {
+    0% { transform: rotate(0deg) scale(0.8); }
+    50% { transform: rotate(180deg) scale(1.1); }
+    100% { transform: rotate(360deg) scale(0.8); }
+  }
+
+  /* Make Opponent Scorecard pulse strongly when AI is thinking */
+  body.ai-thinking .board-score-card.opponent {
+    border-color: var(--opponent-accent);
+    box-shadow: 0 0 40px rgba(244, 63, 94, 0.6);
+    transform: scale(1.1);
+  }
+
   .mobile-layout-stack {
     display: flex; flex-direction: column; align-items: center;
     gap: 30px; width: 100%; position: relative;
@@ -282,21 +365,38 @@
   }
 
   .turn-indicator {
-    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .turn-indicator-row {
+    display: flex; align-items: center; gap: 8px;
   }
   .turn-text {
-    font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+    font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
     letter-spacing: 1.5px; color: var(--accent);
     min-height: 1.2em;
   }
   .turn-dot {
-    width: 8px; height: 8px; border-radius: 50%;
+    width: 6px; height: 6px; border-radius: 50%;
     background: var(--accent);
     animation: pulse 1.5s infinite;
   }
+  .round-badge, .difficulty-badge {
+    background: rgba(255,255,255,0.08); /* Darker premium badge */
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-main);
+    padding: 2px 8px; border-radius: 12px;
+    font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1px;
+    backdrop-filter: blur(4px);
+  }
+  .difficulty-badge {
+    color: var(--accent);
+    border-color: rgba(251, 191, 36, 0.3);
+    background: rgba(251, 191, 36, 0.05);
+  }
   @keyframes pulse {
     0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); }
-    50% { box-shadow: 0 0 0 10px transparent; }
+    50% { box-shadow: 0 0 0 8px transparent; }
   }
 
   /* ── BOARD ─────────────────────────────────── */
@@ -1003,9 +1103,14 @@
   <!-- Scoreboard (turn indicator only) -->
   <div class="scoreboard">
     <div class="turn-indicator">
-      <span class="turn-text" id="turnText">Your Turn</span>
-      <span class="turn-dot" id="turnDot"></span>
-      <span class="round-badge" id="roundBadge">Round 1</span>
+      <div class="turn-indicator-row">
+        <span class="round-badge" id="roundBadge">Round 1</span>
+        <span class="difficulty-badge" id="difficultyBadge" style="display:none;"></span>
+      </div>
+      <div class="turn-indicator-row">
+        <span class="turn-text" id="turnText">Your Turn</span>
+        <span class="turn-dot" id="turnDot"></span>
+      </div>
     </div>
   </div>
 
@@ -1019,6 +1124,12 @@
       </div>
 
       <div class="board" id="board">
+        <!-- Premium AI Thinking Overlay -->
+        <div class="premium-ai-thinker" id="aiThinkerOverlay">
+          <div class="thinker-text">Thinking</div>
+          <div class="thinker-rings"></div>
+        </div>
+
         <div class="pit-row" id="rowOpponent"></div>
         <div class="board-divider"></div>
         <div class="pit-row" id="rowPlayer"></div>
@@ -1904,7 +2015,7 @@ function minimax(boardState, scoresState, depth, alpha, beta, isMaximizing) {
 
   if (depth === 0 || moves.length === 0) {
     // Primary score: difference in captured grains (heavy weight)
-    let evalVal = (scoresState.opp - scoresState.player) * 10;
+    let evalVal = (scoresState.opp - scoresState.player) * 15;
 
     // Board Control: total grains remaining on each side
     const oppBoard = boardState.opp.reduce((a, b) => a + b, 0);
@@ -1913,22 +2024,24 @@ function minimax(boardState, scoresState, depth, alpha, beta, isMaximizing) {
     // Starvation Tactics: Force opponent to skip a turn
     if (playerBoard === 0 && oppBoard > 0) evalVal += 50;
 
-    // Vulnerability Penalty (AI leaves 3 grains -> easy Instant-4 target for player)
-    let aiVulnerable = 0;
-    for (let i = 0; i < PITS_PER_SIDE; i++) {
-      if (boardState.opp[i] === 3) aiVulnerable++;
-    }
-    evalVal -= (aiVulnerable * 15);
+    // INVERTED LOGIC FIX: In Pallankuzhi, pits with 4 grains are captured by the PIT OWNER.
+    // Therefore, an AI pit with 3 grains is Great (AI is close to scoring 4).
+    // A Player pit with 3 grains is Terrible for the AI (Player is close to scoring 4).
 
-    // Attack Bonus (Player leaves 3 grains -> easy Instinct-4 target for AI)
-    let playerVulnerable = 0;
+    let aiNearScore = 0;
     for (let i = 0; i < PITS_PER_SIDE; i++) {
-      if (boardState.player[i] === 3) playerVulnerable++;
+      if (boardState.opp[i] === 3) aiNearScore++;
     }
-    evalVal += (playerVulnerable * 10);
+    evalVal += (aiNearScore * 25); // Massive bonus for setting up AI scoring (1 grain away)
+
+    let playerNearScore = 0;
+    for (let i = 0; i < PITS_PER_SIDE; i++) {
+      if (boardState.player[i] === 3) playerNearScore++;
+    }
+    evalVal -= (playerNearScore * 30); // Massive penalty for giving Player an easy 4
     
-    evalVal += oppBoard;
-    evalVal -= playerBoard;
+    evalVal += (oppBoard * 2);
+    evalVal -= (playerBoard * 2);
 
     return evalVal;
   }
@@ -2046,12 +2159,15 @@ async function endTurn() {
     // Single player: AI takes over
     if (!isPlayerTurn) {
       document.body.classList.add('ai-thinking');
-      setStatus('AI is thinking...');
+      // Hide the turn text entirely to avoid overlapping/redundancy with the premium loader
+      setStatus('');
+      document.getElementById('turnDot').style.display = 'none';
       
       // Wait for 4 seconds as requested to simulate deep thought (Easy/Medium/Hard)
       await sleep(4000);
       
       document.body.classList.remove('ai-thinking');
+      document.getElementById('turnDot').style.display = 'block';
       await aiTurn();
     } else {
       setStatus('Tap a pit on your side');
@@ -2255,8 +2371,8 @@ function showRoundEnd(playerTotalGrains, oppTotalGrains) {
 }
 
 function startNextRound() {
-  document.getElementById('roundEndModal').classList.remove('show');
-  setupNextRound();
+    document.getElementById('roundEndModal').classList.remove('show');
+    setupNextRound();
 }
 
 function setupNextRound() {
@@ -2398,6 +2514,19 @@ function startNewGame() {
   aiDepth = pendingDifficulty;
   closeNewGameModal();
   updateLabels();
+  
+  // Display difficulty setting in UI
+  const diffBadge = document.getElementById('difficultyBadge');
+  if (gameMode === 'single') {
+    diffBadge.style.display = 'inline-block';
+    let diffText = 'EASY';
+    if (aiDepth === 4) diffText = 'MEDIUM';
+    if (aiDepth >= 7) diffText = 'HARD';
+    diffBadge.textContent = diffText;
+  } else {
+    diffBadge.style.display = 'none';
+  }
+
   initBoard();
   renderAll();
   setStatus('Tap a pit on your side to begin');
@@ -2410,6 +2539,7 @@ function updateLabels() {
   if (gameMode === 'two') {
     labelOpp.textContent = 'Player 1';
     labelPlayer.textContent = 'Player 2';
+    document.getElementById('difficultyBadge').style.display = 'none';
   } else {
     labelOpp.textContent = 'Opponent';
     labelPlayer.textContent = 'You';

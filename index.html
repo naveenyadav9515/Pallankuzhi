@@ -2073,36 +2073,36 @@ function getBestAiMove() {
   const moves = getValidMoves(board, 'opp');
   if (moves.length === 0) return -1;
 
-  let bestMoves = [];
-  let bestScore = -Infinity;
+  let moveScores = [];
 
   for (const move of moves) {
     const result = executeTurnSim(board, scores, 'opp', move);
     // Depth changes based on difficulty (Easy=1, Medium=3, Hard=7)
     const score = minimax(result.board, result.scores, aiDepth - 1, -Infinity, Infinity, false);
     
-    if (score > bestScore) {
-      bestScore = score;
-      bestMoves = [move];
-    } else if (score === bestScore) {
-      // Loop Prevention: track ties
-      bestMoves.push(move);
-    }
+    // Inject Heuristic Noise (0 to 12 points) to prevent the AI from playing identical deterministic games.
+    // Since 1 captured grain = ~17 points, this noise is too small to make the AI miss an obvious capture,
+    // but large enough to make it randomly choose between structurally similar opening/setup moves.
+    const noise = Math.random() * 12;
+    moveScores.push({ move: move, score: score + noise });
   }
 
-  // Pick randomly from all mathematically tied "best" moves so games are unique
-  let chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+  // Sort highest score first
+  moveScores.sort((a, b) => b.score - a.score);
+
+  // The AI's best choice is the top of the noisy list
+  let chosenMove = moveScores[0].move;
 
   // Controlled Randomness (Human Error) for Easy and Medium
   if (aiDepth < 7 && moves.length > 1) {
     // 30% error on Easy, 10% on Medium
     const errorChance = aiDepth === 1 ? 0.3 : 0.1; 
     if (Math.random() < errorChance) {
-      // Select a totally different valid move
-      const otherMoves = moves.filter(m => !bestMoves.includes(m));
-      if (otherMoves.length > 0) {
-        chosenMove = otherMoves[Math.floor(Math.random() * otherMoves.length)];
-      }
+      // Pick a genuine "blunder" from the bottom half of the ranked moves
+      const mid = Math.floor(moveScores.length / 2);
+      const errRange = moveScores.length - mid;
+      const blunderIndex = mid + Math.floor(Math.random() * errRange);
+      chosenMove = moveScores[blunderIndex].move;
     }
   }
 

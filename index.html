@@ -169,6 +169,20 @@
     50% { background-position: 100% 50%; }
   }
 
+  /* ── BUTTONS ───────────────────────────────── */
+  .sound-btn {
+    position: absolute; top: 15px; left: 15px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-main);
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 100;
+    transition: all 0.2s;
+    backdrop-filter: blur(5px);
+  }
+  .sound-btn:hover { background: rgba(255, 255, 255, 0.1); transform: scale(1.05); }
+
   /* ── SCOREBOARD ────────────────────────────── */
   .scoreboard {
     flex-shrink: 0;
@@ -1215,6 +1229,99 @@
 
 <script>
 // ═══════════════════════════════════════════════
+//  AUDIO SYNTHESIS (Zero-Latency Web Audio API)
+// ═══════════════════════════════════════════════
+const AudioManager = {
+  ctx: null,
+  isMuted: false,
+
+  init() {
+    if (!this.ctx) {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
+  },
+
+  playTone(freq, type, duration, vol, delay = 0) {
+    if (this.isMuted) return;
+    this.init();
+    
+    const osc = this.ctx.createOscillator();
+    const gainNode = this.ctx.createGain();
+    
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + delay);
+    
+    // Envelope to prevent clipping
+    gainNode.gain.setValueAtTime(0, this.ctx.currentTime + delay);
+    gainNode.gain.linearRampToValueAtTime(vol, this.ctx.currentTime + delay + 0.02);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + delay + duration);
+    
+    osc.connect(gainNode);
+    gainNode.connect(this.ctx.destination);
+    
+    osc.start(this.ctx.currentTime + delay);
+    osc.stop(this.ctx.currentTime + delay + duration);
+  },
+
+  // Specific Sound Effects
+  click() {
+    this.playTone(600, 'sine', 0.05, 0.3);
+  },
+  
+  pitSelect() {
+    this.playTone(300, 'triangle', 0.15, 0.4);
+    this.playTone(450, 'sine', 0.15, 0.2);
+  },
+  
+  grainDrop(pitchOffset = 0) {
+    // Beautiful marimba/woodblock 'plonk'
+    const baseFreq = 800 + (pitchOffset * 40);
+    this.playTone(baseFreq, 'sine', 0.1, 0.3);
+    this.playTone(baseFreq * 2, 'triangle', 0.05, 0.1);
+  },
+  
+  capture(count) {
+    // Ascending major arpeggio
+    const notes = [440, 554.37, 659.25, 880, 1108.73, 1318.51, 1760];
+    const maxNotes = Math.min(count, notes.length);
+    for (let i = 0; i < maxNotes; i++) {
+      this.playTone(notes[i], 'sine', 0.4, 0.15, i * 0.05);
+    }
+  },
+
+  win() {
+    this.playTone(523.25, 'triangle', 0.2, 0.4, 0);   // C5
+    this.playTone(659.25, 'triangle', 0.2, 0.4, 0.2); // E5
+    this.playTone(783.99, 'triangle', 0.4, 0.4, 0.4); // G5
+    this.playTone(1046.50, 'sine', 0.6, 0.5, 0.8);    // C6
+  },
+  
+  lose() {
+    this.playTone(392.00, 'triangle', 0.3, 0.4, 0);   // G4
+    this.playTone(369.99, 'triangle', 0.3, 0.4, 0.3); // F#4
+    this.playTone(349.23, 'triangle', 0.3, 0.4, 0.6); // F4
+    this.playTone(329.63, 'square', 0.8, 0.2, 0.9);   // E4
+  }
+};
+
+function toggleSound() {
+  AudioManager.isMuted = !AudioManager.isMuted;
+  AudioManager.init(); // Attempt to initialize on user click if not already
+  
+  if (AudioManager.isMuted) {
+    document.getElementById('icon-sound-on').style.display = 'none';
+    document.getElementById('icon-sound-off').style.display = 'block';
+  } else {
+    document.getElementById('icon-sound-on').style.display = 'block';
+    document.getElementById('icon-sound-off').style.display = 'none';
+    AudioManager.click();
+  }
+}
+
+// ═══════════════════════════════════════════════
 //  GAME STATE
 // ═══════════════════════════════════════════════
 const PITS_PER_SIDE = 7;
@@ -1632,6 +1739,7 @@ function spawnLandBurst(x, y) {
 // ─── Fly a single grain from src to dest with arc ───
 function flyGrainTo(srcX, srcY, destX, destY, duration) {
   return new Promise(resolve => {
+    AudioManager.grainDrop(Math.random() * 5); // Add pitch variation
     const grain = createFlyingGrain(srcX, srcY);
 
     // Force layout so the initial position is painted
@@ -1866,6 +1974,7 @@ async function executeTurn(side, pitIdx, animate) {
 
         clearLastPicked();
         markLastPicked(nextPit.side, nextPit.idx);
+        AudioManager.pitSelect();
         triggerAnim(`pit-${nextPit.side}-${nextPit.idx}`, 'picking');
         renderPit(nextPit.side, nextPit.idx);
 
@@ -1888,6 +1997,7 @@ async function executeTurn(side, pitIdx, animate) {
         board[capturePit.side][capturePit.idx] = 0;
 
         if (animate) {
+          AudioManager.capture(capturedGrains);
           triggerAnim(`pit-${capturePit.side}-${capturePit.idx}`, 'capturing');
 
           // Fly captured grains to the score area
@@ -2198,6 +2308,7 @@ async function playerTurnFlow(idx) {
   if (!isPlayerTurn || isAnimating || gameOver) return;
   if (board.player[idx] === 0) return;
 
+  AudioManager.pitSelect();
   isAnimating = true;
   updateClickable();
 
@@ -2322,15 +2433,22 @@ function showGameOver() {
     title.textContent = `${p2Label} Win${gameMode === 'two' ? 's' : ''}!`;
     msg.textContent = `${p2Label} captured ${scores.player} grains vs ${p1Label}'s ${scores.opp}. Brilliant strategy!`;
     spawnConfetti();
+    AudioManager.win();
   } else if (scores.opp > scores.player) {
     icon.textContent = gameMode === 'two' ? '🏆' : '😤';
     title.textContent = `${p1Label} Win${gameMode === 'two' ? 's' : ''}!`;
     msg.textContent = `${p1Label} captured ${scores.opp} grains vs ${p2Label}'s ${scores.player}.${gameMode === 'two' ? ' Great game!' : ' Try again!'}`;
-    if (gameMode === 'two') spawnConfetti();
+    if (gameMode === 'two') {
+      spawnConfetti();
+      AudioManager.win();
+    } else {
+      AudioManager.lose();
+    }
   } else {
     icon.textContent = '🤝';
     title.textContent = 'It\'s a Draw!';
     msg.textContent = `Both captured ${scores.player} grains. An evenly matched game!`;
+    AudioManager.win();
   }
 
   modal.classList.add('show');
@@ -2494,6 +2612,8 @@ function closeNewGameModal() {
 }
 
 function chooseSinglePlayer() {
+  AudioManager.init();
+  AudioManager.click();
   document.getElementById('modeSelectView').style.display = 'none';
   document.getElementById('diffSelectView').style.display = '';
   document.getElementById('modeSubtitle').textContent = 'Single Player';
@@ -2501,6 +2621,8 @@ function chooseSinglePlayer() {
 }
 
 function chooseTwoPlayer() {
+  AudioManager.init();
+  AudioManager.click();
   gameMode = 'two';
   closeNewGameModal();
   updateLabels();
@@ -2512,16 +2634,19 @@ function chooseTwoPlayer() {
 }
 
 function chooseProPlayer() {
+  AudioManager.click();
   // Coming soon - do nothing
 }
 
 function backToModeSelect() {
+  AudioManager.click();
   document.getElementById('modeSelectView').style.display = '';
   document.getElementById('diffSelectView').style.display = 'none';
   document.getElementById('modeSubtitle').textContent = 'Choose Game Mode';
 }
 
 function selectDifficulty(level) {
+  AudioManager.click();
   pendingDifficulty = level;
   updateDiffButtons();
 }
@@ -2533,6 +2658,7 @@ function updateDiffButtons() {
 }
 
 function startNewGame() {
+  AudioManager.click();
   gameMode = 'single';
   aiDepth = pendingDifficulty;
   closeNewGameModal();

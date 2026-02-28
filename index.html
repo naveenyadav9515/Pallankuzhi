@@ -1244,6 +1244,7 @@ const AudioManager = {
     }
   },
 
+  // Used for melodic/musical UI tones (chimes, wins)
   playTone(freq, type, duration, vol, delay = 0) {
     if (this.isMuted) return;
     this.init();
@@ -1254,7 +1255,7 @@ const AudioManager = {
     osc.type = type;
     osc.frequency.setValueAtTime(freq, this.ctx.currentTime + delay);
     
-    // Envelope to prevent clipping
+    // Smooth envelope for musical tones
     gainNode.gain.setValueAtTime(0, this.ctx.currentTime + delay);
     gainNode.gain.linearRampToValueAtTime(vol, this.ctx.currentTime + delay + 0.02);
     gainNode.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + delay + duration);
@@ -1266,44 +1267,68 @@ const AudioManager = {
     osc.stop(this.ctx.currentTime + delay + duration);
   },
 
+  // Used for physical game events (seeds hitting wood)
+  playPercussive(freq, duration, vol, delay = 0) {
+    if (this.isMuted) return;
+    this.init();
+
+    const osc = this.ctx.createOscillator();
+    const gainNode = this.ctx.createGain();
+
+    osc.type = 'sine'; // Sine works best for soft wood thuds
+    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + delay);
+    // Slight pitch drop creates a realistic "thud" effect
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.6, this.ctx.currentTime + delay + duration);
+
+    // Instant attack, ultra-fast exponential decay
+    gainNode.gain.setValueAtTime(vol, this.ctx.currentTime + delay);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + delay + duration);
+
+    osc.connect(gainNode);
+    gainNode.connect(this.ctx.destination);
+
+    osc.start(this.ctx.currentTime + delay);
+    osc.stop(this.ctx.currentTime + delay + duration);
+  },
+
   // Specific Sound Effects
   click() {
-    this.playTone(600, 'sine', 0.05, 0.3);
+    this.playPercussive(300, 0.05, 0.2);
   },
   
   pitSelect() {
-    this.playTone(300, 'triangle', 0.15, 0.4);
-    this.playTone(450, 'sine', 0.15, 0.2);
+    this.playPercussive(250, 0.1, 0.3);
+    this.playPercussive(350, 0.1, 0.1);
   },
   
   grainDrop(pitchOffset = 0) {
-    // Beautiful marimba/woodblock 'plonk'
-    const baseFreq = 800 + (pitchOffset * 40);
-    this.playTone(baseFreq, 'sine', 0.1, 0.3);
-    this.playTone(baseFreq * 2, 'triangle', 0.05, 0.1);
+    // Soft, wooden 'tock' instead of harsh beep
+    // Uses much lower frequencies (300-400Hz vs 800+Hz)
+    const baseFreq = 300 + (pitchOffset * 15);
+    this.playPercussive(baseFreq, 0.06, 0.25);
   },
   
   capture(count) {
-    // Ascending major arpeggio
-    const notes = [440, 554.37, 659.25, 880, 1108.73, 1318.51, 1760];
+    // Gentle sparkling chime
+    const notes = [523.25, 659.25, 783.99, 1046.50]; // C5 E5 G5 C6
     const maxNotes = Math.min(count, notes.length);
     for (let i = 0; i < maxNotes; i++) {
-      this.playTone(notes[i], 'sine', 0.4, 0.15, i * 0.05);
+      this.playTone(notes[i], 'triangle', 0.3, 0.1, i * 0.08); // Softer, slower arpeggio
     }
   },
 
   win() {
-    this.playTone(523.25, 'triangle', 0.2, 0.4, 0);   // C5
-    this.playTone(659.25, 'triangle', 0.2, 0.4, 0.2); // E5
-    this.playTone(783.99, 'triangle', 0.4, 0.4, 0.4); // G5
-    this.playTone(1046.50, 'sine', 0.6, 0.5, 0.8);    // C6
+    this.playTone(440, 'triangle', 0.4, 0.2, 0);   
+    this.playTone(554.37, 'triangle', 0.4, 0.2, 0.1); 
+    this.playTone(659.25, 'triangle', 0.6, 0.2, 0.2); 
+    this.playTone(880, 'sine', 1.0, 0.3, 0.3);    
   },
   
   lose() {
-    this.playTone(392.00, 'triangle', 0.3, 0.4, 0);   // G4
-    this.playTone(369.99, 'triangle', 0.3, 0.4, 0.3); // F#4
-    this.playTone(349.23, 'triangle', 0.3, 0.4, 0.6); // F4
-    this.playTone(329.63, 'square', 0.8, 0.2, 0.9);   // E4
+    this.playTone(349.23, 'triangle', 0.4, 0.2, 0);   // F4
+    this.playTone(329.63, 'triangle', 0.4, 0.2, 0.2); // E4
+    this.playTone(311.13, 'triangle', 0.4, 0.2, 0.4); // Eb4
+    this.playTone(293.66, 'sine', 1.0, 0.2, 0.6);     // D4
   }
 };
 

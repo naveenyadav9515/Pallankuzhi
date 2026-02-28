@@ -2045,8 +2045,13 @@ async function endTurn() {
   } else {
     // Single player: AI takes over
     if (!isPlayerTurn) {
+      document.body.classList.add('ai-thinking');
       setStatus('AI is thinking...');
-      await sleep(400);
+      
+      // Wait for 4 seconds as requested to simulate deep thought (Easy/Medium/Hard)
+      await sleep(4000);
+      
+      document.body.classList.remove('ai-thinking');
       await aiTurn();
     } else {
       setStatus('Tap a pit on your side');

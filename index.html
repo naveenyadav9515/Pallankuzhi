@@ -1176,7 +1176,7 @@
 <!-- Round End Modal -->
 <div class="modal-overlay" id="roundEndModal">
   <div class="modal">
-    <div class="modal-icon">🔄</div>
+    <div class="modal-icon" onclick="resetGame()" style="cursor:pointer;" title="Restart Game">🔄</div>
     <h2 id="roundEndTitle">Round Complete!</h2>
     <p id="roundEndMessage">Round summary</p>
     <div id="roundEndDetails" style="text-align:left; font-size:0.78rem; background:rgba(255,255,255,0.04); border-radius:10px; padding:12px; margin:10px 0; color:var(--text-dim); line-height:1.8;"></div>
@@ -2352,19 +2352,31 @@ function showRoundEnd(playerTotalGrains, oppTotalGrains) {
   msg.textContent = `${scores.player > scores.opp ? p2Label : p1Label} led this round. Preparing for Round ${roundNumber + 1}...`;
 
   // Calculate pit filling preview
-  const playerPits = Math.floor(playerTotalGrains / INITIAL_GRAINS);
-  const playerBank = playerTotalGrains % INITIAL_GRAINS;
-  const oppPits = Math.floor(oppTotalGrains / INITIAL_GRAINS);
-  const oppBank = oppTotalGrains % INITIAL_GRAINS;
+  let playerPits = Math.floor(playerTotalGrains / INITIAL_GRAINS);
+  let playerBank = playerTotalGrains % INITIAL_GRAINS;
+  let oppPits = Math.floor(oppTotalGrains / INITIAL_GRAINS);
+  let oppBank = oppTotalGrains % INITIAL_GRAINS;
+
+  if (playerPits > PITS_PER_SIDE) {
+    playerBank += (playerPits - PITS_PER_SIDE) * INITIAL_GRAINS;
+    playerPits = PITS_PER_SIDE;
+  }
+  if (oppPits > PITS_PER_SIDE) {
+    oppBank += (oppPits - PITS_PER_SIDE) * INITIAL_GRAINS;
+    oppPits = PITS_PER_SIDE;
+  }
+
+  const playerDead = PITS_PER_SIDE - playerPits;
+  const oppDead = PITS_PER_SIDE - oppPits;
 
   details.innerHTML = `
     <div style="margin-bottom:8px"><strong>${p1Label}:</strong></div>
     <div>Earned: <strong>${scores.opp}</strong> grains + Banked: <strong>${bankedGrains.opp}</strong> = <strong>${oppTotalGrains}</strong> total</div>
-    <div>Next round: <strong>${oppPits}</strong> pits filled, <strong>${PITS_PER_SIDE - oppPits}</strong> dead, <strong>${oppBank}</strong> banked</div>
+    <div>Next round: <strong>${oppPits}</strong> pits filled, <strong>${oppDead}</strong> dead, <strong>${oppBank}</strong> banked</div>
     <hr style="border-color:rgba(255,255,255,0.1); margin:8px 0">
     <div style="margin-bottom:8px"><strong>${p2Label}:</strong></div>
     <div>Earned: <strong>${scores.player}</strong> grains + Banked: <strong>${bankedGrains.player}</strong> = <strong>${playerTotalGrains}</strong> total</div>
-    <div>Next round: <strong>${playerPits}</strong> pits filled, <strong>${PITS_PER_SIDE - playerPits}</strong> dead, <strong>${playerBank}</strong> banked</div>
+    <div>Next round: <strong>${playerPits}</strong> pits filled, <strong>${playerDead}</strong> dead, <strong>${playerBank}</strong> banked</div>
   `;
 
   modal.classList.add('show');
@@ -2381,8 +2393,19 @@ function setupNextRound() {
   const oppTotalGrains = scores.opp + bankedGrains.opp;
 
   // Fill pits: each pit gets exactly 5, fill left-to-right
-  const playerPitsToFill = Math.floor(playerTotalGrains / INITIAL_GRAINS);
-  const oppPitsToFill = Math.floor(oppTotalGrains / INITIAL_GRAINS);
+  let playerPitsToFill = Math.floor(playerTotalGrains / INITIAL_GRAINS);
+  let oppPitsToFill = Math.floor(oppTotalGrains / INITIAL_GRAINS);
+  let playerStartingScore = playerTotalGrains % INITIAL_GRAINS;
+  let oppStartingScore = oppTotalGrains % INITIAL_GRAINS;
+
+  if (playerPitsToFill > PITS_PER_SIDE) {
+    playerStartingScore += (playerPitsToFill - PITS_PER_SIDE) * INITIAL_GRAINS;
+    playerPitsToFill = PITS_PER_SIDE;
+  }
+  if (oppPitsToFill > PITS_PER_SIDE) {
+    oppStartingScore += (oppPitsToFill - PITS_PER_SIDE) * INITIAL_GRAINS;
+    oppPitsToFill = PITS_PER_SIDE;
+  }
 
   // Set up board
   for (let i = 0; i < PITS_PER_SIDE; i++) {
@@ -2395,8 +2418,8 @@ function setupNextRound() {
   }
 
   // Leftover grains become the starting score for the new round (visible on scoreboard)
-  scores.player = playerTotalGrains % INITIAL_GRAINS;
-  scores.opp = oppTotalGrains % INITIAL_GRAINS;
+  scores.player = playerStartingScore;
+  scores.opp = oppStartingScore;
   bankedGrains.player = 0;
   bankedGrains.opp = 0;
 

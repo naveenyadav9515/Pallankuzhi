@@ -1302,10 +1302,16 @@ const AudioManager = {
   },
   
   grainDrop(pitchOffset = 0) {
-    // Soft, wooden 'tock' instead of harsh beep
-    // Uses much lower frequencies (300-400Hz vs 800+Hz)
-    const baseFreq = 300 + (pitchOffset * 15);
-    this.playPercussive(baseFreq, 0.06, 0.25);
+    // Convert the random 0-5 input into a C-Major Pentatonic scale note
+    // This ensures that when dozens of grains drop during distribution, 
+    // it sounds like a beautiful, harmonized wind chime instead of chaotic noise.
+    const pentatonic = [523.25, 587.33, 659.25, 783.99, 880.00, 1046.50]; // C5, D5, E5, G5, A5, C6
+    const noteIdx = Math.floor(pitchOffset) % pentatonic.length;
+    const freq = pentatonic[noteIdx];
+
+    // Play a bright, crystalline 'plink'
+    this.playTone(freq, 'sine', 0.12, 0.15); // Main bell body
+    this.playTone(freq * 2, 'triangle', 0.05, 0.05); // High-frequency attack ping
   },
   
   capture(count) {

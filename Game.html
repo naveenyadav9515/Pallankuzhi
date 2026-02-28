@@ -1,0 +1,2397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+<title>Pallankuzhi</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+  :root {
+    /* Premium Obsidian & Gold Palette */
+    --bg-primary: #06050b;       /* Deepest space */
+    --bg-secondary: #0c0914;     /* Dark obsidian */
+    --bg-card: rgba(22, 17, 36, 0.4); /* Glassmorphism base */
+    
+    --accent: #fcd34d;           /* Rich Gold */
+    --accent: #fbbf24;           /* Rich Gold */
+    --accent-glow: rgba(251, 191, 36, 0.5); /* Stronger core glow */
+    --accent-hover: #fef08a;     /* Bright Gold */
+    
+    --text: #f8fafc;             /* Crisp White */
+    --text-dim: #94a3b8;         /* Slate */
+    
+    --bg-color: #050308;
+    --board-bg: rgba(22, 17, 36, 0.45); /* More sheer, darker violet/blue base */
+    --board-border: rgba(255, 255, 255, 0.08); /* Finer border */
+    
+    --pit-bg: rgba(0, 0, 0, 0.5);
+    --pit-highlight: rgba(251, 191, 36, 0.15); /* Warmer gold highlight */
+    --pit-border: rgba(255, 255, 255, 0.05);
+    --pit-border-highlight: rgba(255, 255, 255, 0.15);
+    --pit-hover: rgba(252, 211, 77, 0.08); /* Gold tinted hover */
+    
+    --grain: #eab308;
+    --grain-highlight: #fef08a;
+    --grain-shadow: #713f12;
+    
+    --opponent-accent: #f43f5e; /* Richer ruby/rose for opponent */
+    --opponent-glow: rgba(244, 63, 94, 0.3);
+    
+    --player-accent: #38bdf8;    /* Brighter cyan/blue for player */
+    --player-glow: rgba(56, 189, 248, 0.3);
+    
+    --text-main: #f8fafc;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    font-family: 'Outfit', sans-serif;
+    background: radial-gradient(circle at top center, #1b1429 0%, var(--bg-color) 100%);
+    color: var(--text-main);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  /* ── LAYOUT ────────────────────────────────── */
+  #app {
+    display: flex; flex-direction: column;
+    height: 100dvh; width: 100%;
+    overflow: hidden;
+    position: relative;
+    z-index: 1; /* Above particles */
+  }
+
+  .new-game-btn {
+    position: absolute;
+    top: 20px; right: 20px;
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(12px);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    color: var(--accent);
+    z-index: 100;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  }
+  .new-game-btn:hover {
+    background: rgba(252, 211, 77, 0.15);
+    border-color: var(--accent);
+    transform: translateY(-2px) rotate(15deg);
+    box-shadow: 0 0 20px var(--accent-glow);
+  }
+  .new-game-btn:active { transform: translateY(0) scale(0.95); }
+
+  /* Premium Background Particles (Ambient Dust/Embers) */
+  .bg-particles {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    overflow: hidden;
+  }
+  .bg-particles span {
+    position: absolute; border-radius: 50%;
+    background: radial-gradient(circle at center, rgba(252, 211, 77, 0.8) 0%, transparent 70%);
+    animation: drift 25s infinite linear;
+    opacity: 0;
+    filter: blur(2px);
+  }
+
+  @keyframes drift {
+    0% { transform: translateY(110vh) translateX(-20vw) scale(0.5); opacity: 0; }
+    10% { opacity: 0.3; }
+    50% { transform: translateY(50vh) translateX(20vw) scale(1.2); opacity: 0.5; }
+    90% { opacity: 0.1; }
+    100% { transform: translateY(-10vh) translateX(-10vw) scale(0.8); opacity: 0; }
+  }
+
+  /* ── AMBIENT BACKGROUND LIGHTING ───────────── */
+  .ambient-pool {
+    position: fixed;
+    width: 200vw; height: 100vh;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.15;
+    pointer-events: none;
+    z-index: 0;
+    transition: opacity 2s ease, transform 3s ease;
+  }
+  .ambient-opp {
+    top: -60vh; left: -50vw;
+    background: radial-gradient(circle, var(--opponent-accent) 0%, transparent 70%);
+    animation: breathe 8s infinite alternate ease-in-out;
+  }
+  .ambient-player {
+    bottom: -60vh; left: -50vw;
+    background: radial-gradient(circle, var(--player-accent) 0%, transparent 70%);
+    animation: breathe 10s infinite alternate-reverse ease-in-out;
+    animation-delay: -3s;
+  }
+  
+  @keyframes breathe {
+    0% { transform: scale(1); opacity: 0.1; }
+    100% { transform: scale(1.1); opacity: 0.25; }
+  }
+  
+  body.turn-opp .ambient-opp { opacity: 0.35; transform: scale(1.15); }
+  body.turn-player .ambient-player { opacity: 0.35; transform: scale(1.15); }
+
+  /* ── ELEGANT SVG WATERMARK ─────────────────── */
+  .bg-watermark {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    opacity: 0.03; /* Extremely faint */
+    background-image: url("data:image/svg+xml,%3Csvg width='400' height='400' viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cg stroke='%23ffffff' stroke-width='1.5' fill='none' fill-rule='evenodd' opacity='0.8'%3E%3Cpath d='M200 100 A100 100 0 1 1 200 300 A100 100 0 1 1 200 100 Z M200 50 A150 150 0 1 1 200 350 A150 150 0 1 1 200 50 Z M200 0 A200 200 0 1 1 200 400 A200 200 0 1 1 200 0 Z M100 200 L300 200 M200 100 L200 300 M129 129 L271 271 M129 271 L271 129' /%3E%3C/g%3E%3C/svg%3E");
+    background-size: 800px;
+    background-position: center;
+    background-repeat: repeat;
+  }
+
+  /* ── HEADER ────────────────────────────────── */
+  .header {
+    display: none; /* Removed as requested */
+  }
+  .header h1 {
+    font-size: 1.6rem; font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), #ffdd70, var(--accent));
+    background-size: 200% 200%;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmerText 4s ease-in-out infinite;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  @keyframes shimmerText {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  /* ── SCOREBOARD ────────────────────────────── */
+  .scoreboard {
+    flex-shrink: 0;
+    display: flex; justify-content: space-around; align-items: center;
+    padding: 6px 12px; z-index: 2;
+    position: relative;
+  }
+  .score-card {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 6px 18px; border-radius: 14px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    backdrop-filter: blur(10px);
+    min-width: 90px;
+    transition: all .3s ease;
+  }
+  .score-card.opponent { transform-origin: left; }
+  .score-card.player { transform-origin: right; }
+  .score-card.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 25px var(--accent-glow);
+    transform: scale(1.08);
+  }
+  @media (max-width: 600px) {
+    .scoreboard { display: none; } /* Hide redundant top scoreboard on mobile */
+  }
+  .score-label {
+    font-size: 0.65rem; text-transform: uppercase;
+    letter-spacing: 2px; color: var(--text-dim); font-weight: 600;
+  }
+  .score-value {
+    font-size: 1.8rem; font-weight: 900;
+    transition: all .3s ease;
+  }
+  .score-card.player .score-value { color: var(--player-accent); }
+  .score-card.opponent .score-value { color: var(--opponent-accent); }
+
+  .board-score-card {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 12px 20px; border-radius: 20px;
+    background: rgba(22, 17, 36, 0.45); /* Glassmorphism base */
+    border: 1px solid rgba(255, 255, 255, 0.08); /* Finer border */
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    min-width: 120px;
+    transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); /* Physics bouncy ease */
+    position: absolute;
+    z-index: 10;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255,255,255,0.1);
+  }
+  .board-score-card.opponent {
+    top: -10px; left: -160px;
+  }
+  .board-score-card.player {
+    bottom: -10px; left: -160px;
+  }
+  .board-score-card.active {
+    border-color: var(--accent);
+    background: rgba(252, 211, 77, 0.05);
+    box-shadow: 0 0 30px var(--accent-glow);
+    transform: scale(1.05);
+  }
+  .board-score-card.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 20px var(--accent-glow);
+    transform: scale(1.05);
+  }
+  .board-score-card .score-label {
+    font-size: 0.65rem; text-transform: uppercase;
+    letter-spacing: 2px; color: var(--text-dim); font-weight: 600;
+  }
+  .board-score-card .score-value {
+    font-size: 1.4rem; font-weight: 900;
+    transition: all .3s ease;
+  }
+  .board-score-card.player .score-value { color: var(--player-accent); }
+  .board-score-card.opponent .score-value { color: var(--opponent-accent); }
+
+  .mobile-layout-stack {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 30px; width: 100%; position: relative;
+  }
+
+  /* Responsive: on smaller screens, stack scorecards and board vertically */
+  @media (max-width: 850px) {
+    .board-wrapper {
+      align-items: stretch; /* Allow stack to span full height */
+      padding: 10px; 
+    }
+    .mobile-layout-stack { 
+      gap: 0; 
+      justify-content: space-between; 
+      min-height: 100%;
+      padding: 60px 0; /* Keeps scorecards 60px away from the absolute top/bottom */
+      box-sizing: border-box;
+    }
+    .board-score-card {
+      position: relative !important;
+      left: auto !important; top: auto !important; bottom: auto !important;
+      transform: none !important;
+      margin: 0;
+      min-width: 140px;
+      padding: 10px 24px;
+    }
+    .board-score-card.opponent { order: 1; }
+    .board { order: 2; margin: auto 0; } /* dynamically center board in available space */
+    .board-score-card.player { order: 3; }
+    
+    .board-score-card .score-value { font-size: 1.8rem; }
+    .board-score-card .score-label { font-size: 0.7rem; }
+  }
+
+  .turn-indicator {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+  }
+  .turn-text {
+    font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 1.5px; color: var(--accent);
+    min-height: 1.2em;
+  }
+  .turn-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); }
+    50% { box-shadow: 0 0 0 10px transparent; }
+  }
+
+  /* ── BOARD ─────────────────────────────────── */
+  .board-wrapper {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    padding: 10px; z-index: 2; position: relative;
+    min-height: 0;
+    overflow-y: auto; /* Allow scrolling if screen is very short */
+  }
+
+  .board {
+    width: 95%; max-width: 520px;
+    background: var(--board-bg);
+    border: 1px solid var(--board-border);
+    border-radius: 40px;
+    padding: 36px 24px;
+    position: relative;
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    box-shadow:
+      0 0 50px rgba(0, 0, 0, 0.8),
+      0 20px 80px rgba(0, 0, 0, 0.95),
+      inset 0 1px 1px rgba(255, 255, 255, 0.1),
+      inset 0 -1px 2px rgba(0, 0, 0, 0.8);
+    transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @media (max-width: 540px) {
+    .board {
+      width: 98%;
+      padding: 24px 12px;
+      border-radius: 32px;
+    }
+    .pit-row {
+      gap: 6px;
+      padding: 4px 2px;
+    }
+  }
+
+  .board::before {
+    content: ''; position: absolute; inset: -1px;
+    border-radius: 33px;
+    background: linear-gradient(145deg, rgba(252, 211, 77, 0.15), transparent 40%, transparent 60%, rgba(56, 189, 248, 0.1));
+    z-index: -1;
+  }
+
+  .board-divider {
+    height: 1px; margin: 12px 20px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+  }
+
+  .pit-row {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 12px;
+    padding: 4px 6px;
+  }
+
+  /* ── 3D CARVED PITS ────────────────────────── */
+  .pit {
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: var(--pit-bg);
+    border: 1px solid var(--pit-border);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    position: relative;
+    cursor: default;
+    transition: all .3s cubic-bezier(.34,1.56,.64,1);
+    overflow: visible;
+    /* 3D Carved effect */
+    box-shadow: 
+      inset 0 4px 6px rgba(0,0,0,0.6),
+      inset 0 0 10px rgba(0,0,0,0.8),
+      0 1px 1px rgba(255,255,255,0.08);
+  }
+  
+  .pit.clickable {
+    cursor: pointer;
+  }
+  
+  /* Player hover state */
+  #rowPlayer .pit.clickable:hover {
+    border-color: rgba(56, 189, 248, 0.4);
+    background: radial-gradient(circle at 50% 120%, rgba(56, 189, 248, 0.2), var(--pit-bg));
+    box-shadow: 
+      inset 0 4px 6px rgba(0,0,0,0.5),
+      inset 0 0 10px rgba(0,0,0,0.7),
+      0 0 20px rgba(56, 189, 248, 0.15),
+      0 1px 1px rgba(255,255,255,0.08);
+    transform: translateY(-4px) scale(1.02);
+  }
+
+  /* Opponent hover state (two player mode) */
+  #rowOpponent .pit.clickable:hover {
+    border-color: rgba(244, 63, 94, 0.4);
+    background: radial-gradient(circle at 50% -20%, rgba(244, 63, 94, 0.2), var(--pit-bg));
+    box-shadow: 
+      inset 0 4px 6px rgba(0,0,0,0.5),
+      inset 0 0 10px rgba(0,0,0,0.7),
+      0 0 20px rgba(244, 63, 94, 0.15),
+      0 1px 1px rgba(255,255,255,0.08);
+    transform: translateY(4px) scale(1.02);
+  }
+
+  .pit.clickable:active {
+    transform: scale(0.92);
+    box-shadow: 
+      inset 0 8px 12px rgba(0,0,0,0.8),
+      inset 0 0 15px rgba(0,0,0,0.9),
+      0 0 0 transparent;
+  }
+
+  /* Last picked pit indicator - floating ring */
+  .pit.last-picked::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    box-shadow: 0 0 10px var(--accent-glow), inset 0 0 10px var(--accent-glow);
+    animation: lastPickedPulse 2s ease-in-out infinite, lastPickedSpin 8s linear infinite;
+    pointer-events: none;
+    clip-path: polygon(0 0, 100% 0, 100% 20%, 0 20%, 0 40%, 100% 40%, 100% 60%, 0 60%, 0 80%, 100% 80%, 100% 100%, 0 100%);
+  }
+  @keyframes lastPickedPulse {
+    0%, 100% { transform: scale(1); opacity: 0.8; }
+    50% { transform: scale(1.05); opacity: 0.4; }
+  }
+  @keyframes lastPickedSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .pit-count {
+    font-family: 'Inter', sans-serif;
+    font-size: 1.15rem; font-weight: 800;
+    color: var(--text);
+    z-index: 2;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    pointer-events: none;
+    transition: all .25s ease;
+    position: relative;
+    line-height: 1;
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    /* Dark glass backing behind the number */
+    background: radial-gradient(circle at 50% 50%, rgba(10, 8, 16, 0.85) 50%, transparent 100%);
+  }
+  @media (max-width: 540px) {
+    .pit-count {
+      font-size: 1rem;
+      width: 24px; height: 24px;
+    }
+  }
+  .pit.empty .pit-count { 
+    color: var(--text-dim); 
+    opacity: 0.3; 
+    text-shadow: none;
+  }
+
+  .pit-number {
+    position: absolute; bottom: -18px;
+    font-size: 0.55rem; font-weight: 700;
+    color: var(--text-dim); opacity: 0.4;
+    pointer-events: none;
+  }
+
+  /* ── 3D GLOWING GRAINS (SEEDS) ────────────────────────── */
+  .grain-dots {
+    position: absolute; inset: 0; pointer-events: none; z-index: 3;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.6));
+  }
+  .grain-dot {
+    position: absolute;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    /* 3D Sphere effect */
+    background: radial-gradient(circle at 30% 30%, var(--grain-highlight), var(--grain) 40%, var(--grain-shadow) 90%);
+    box-shadow: 
+      inset -1px -1px 2px rgba(0,0,0,0.5), 
+      0 0 4px rgba(251, 191, 36, 0.4);
+    transform: translate(-50%, -50%);
+    transition: all .2s cubic-bezier(.34,1.56,.64,1);
+  }
+
+  /* Animations */
+  .pit.dropping {
+    animation: dropPulse .3s ease;
+  }
+  @keyframes dropPulse {
+    0% { box-shadow: 0 0 0 0 var(--accent-glow); }
+    50% { box-shadow: 0 0 20px 4px var(--accent-glow); border-color: var(--accent); }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
+
+  .pit.picking {
+    animation: pickPulse .6s cubic-bezier(.4,0,.2,1);
+    z-index: 10;
+  }
+  @keyframes pickPulse {
+    0%   { transform: scale(1); border-color: var(--pit-border); box-shadow: none; }
+    15%  { transform: scale(0.8); border-color: var(--accent); box-shadow: 0 0 30px 8px var(--accent-glow), inset 0 0 15px rgba(240,192,64,0.2); }
+    35%  { transform: scale(1.12); border-color: #ffd700; box-shadow: 0 0 40px 12px rgba(255,215,0,0.5), 0 0 80px 20px rgba(240,192,64,0.15); }
+    55%  { transform: scale(0.95); border-color: var(--accent); box-shadow: 0 0 20px 4px var(--accent-glow); }
+    100% { transform: scale(1); border-color: var(--pit-border); box-shadow: none; }
+  }
+
+  /* Expanding ring burst on pick */
+  .pick-ring {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 0; height: 0;
+    border-radius: 50%;
+    border: 3px solid var(--accent);
+    transform: translate(-50%, -50%);
+    animation: ringExpand .7s ease-out forwards;
+    pointer-events: none; z-index: 9;
+  }
+  @keyframes ringExpand {
+    0%   { width: 20%; height: 20%; opacity: 1; border-width: 3px; }
+    100% { width: 180%; height: 180%; opacity: 0; border-width: 1px; }
+  }
+
+  /* Burst particles on pick */
+  .pick-particle {
+    position: fixed;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    pointer-events: none; z-index: 1000;
+    animation: particleBurst .7s ease-out forwards;
+  }
+  @keyframes particleBurst {
+    0%   { opacity: 1; transform: translate(0, 0) scale(1); }
+    100% { opacity: 0; transform: var(--particle-dir) scale(0.3); }
+  }
+
+  .pit.capturing {
+    animation: capturePulse .6s ease;
+  }
+  @keyframes capturePulse {
+    0% { transform: scale(1); }
+    20% { transform: scale(1.15); border-color: #ff6b6b; box-shadow: 0 0 30px rgba(255,107,107,0.5); }
+    50% { transform: scale(0.9); }
+    100% { transform: scale(1); box-shadow: none; }
+  }
+
+  .pit.instant4 {
+    animation: instant4Pulse .5s ease;
+  }
+  @keyframes instant4Pulse {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.2); border-color: var(--accent); box-shadow: 0 0 35px var(--accent-glow), 0 0 60px rgba(240,192,64,0.3); }
+    100% { transform: scale(1); box-shadow: none; }
+  }
+
+  /* Flying grain animation (for distribution) */
+  .flying-grain {
+    position: fixed;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    /* 3D Sphere effect matching the new beads */
+    background: radial-gradient(circle at 30% 30%, var(--grain-highlight), var(--grain) 40%, var(--grain-shadow) 90%);
+    box-shadow: 
+      inset -1px -1px 2px rgba(0,0,0,0.5), 
+      0 0 12px rgba(251, 191, 36, 0.8),
+      0 4px 8px rgba(0,0,0,0.5);
+    z-index: 1001;
+    pointer-events: none;
+    will-change: transform, left, top;
+  }
+  .flying-grain.in-flight {
+    transition: left 0.32s cubic-bezier(.2,.6,.35,1), top 0.32s cubic-bezier(.2,.0,.35,1);
+  }
+
+  /* Trail dot left behind during flight */
+  .grain-trail {
+    position: fixed;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(251, 191, 36, 0.9), transparent);
+    pointer-events: none; z-index: 1000;
+    animation: trailFade 0.4s ease-out forwards;
+    filter: blur(1px);
+  }
+  @keyframes trailFade {
+    0% { opacity: 0.8; transform: scale(1); }
+    100% { opacity: 0; transform: scale(0.2); }
+  }
+
+  /* Grain landing burst */
+  .grain-land-burst {
+    position: fixed;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: 2px solid rgba(251, 191, 36, 0.8);
+    pointer-events: none; z-index: 1000;
+    animation: landBurst 0.35s ease-out forwards;
+    transform: translate(-50%, -50%);
+  }
+  @keyframes landBurst {
+    0% { opacity: 1; width: 4px; height: 4px; border-width: 3px; }
+    100% { opacity: 0; width: 36px; height: 36px; border-width: 1px; }
+  }
+
+  /* Collecting grain (fly to hand) */
+  .collecting-grain {
+    position: fixed;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, var(--grain-highlight), var(--grain) 40%, var(--grain-shadow) 90%);
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.6), 0 2px 6px rgba(0,0,0,0.6);
+    z-index: 1001;
+    pointer-events: none;
+    transition: left 0.35s cubic-bezier(.3,.0,.3,1), top 0.35s cubic-bezier(.3,.0,.3,1), opacity 0.35s ease;
+  }
+
+  /* Score fly animation */
+  .score-fly {
+    position: fixed; z-index: 999; pointer-events: none;
+    font-size: 1.2rem; font-weight: 900;
+    animation: flyUp 1s ease-out forwards;
+  }
+  .score-fly.player-fly { color: var(--player-accent); }
+  .score-fly.opponent-fly { color: var(--opponent-accent); }
+
+  @keyframes flyUp {
+    0% { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-60px) scale(1.5); }
+  }
+
+  /* ── HAND INDICATOR (Premium Floating Circle) ─ */
+  .hand-display {
+    position: absolute;
+    bottom: -15px; left: 50%;
+    transform: translateX(-50%) translateY(100%);
+    z-index: 20;
+    pointer-events: none;
+    display: flex; flex-direction: column; align-items: center;
+    /* Hidden by default when empty */
+    opacity: 0;
+    transition: all .4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .hand-display.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  /* When playing from opponent/top side, move orb above the board */
+  .hand-display.top-side {
+    bottom: auto;
+    top: -15px;
+    transform: translateX(-50%) translateY(-100%);
+  }
+  /* Let's define the base .hand-orb style FIRST so media queries can override it */
+  .hand-orb {
+    position: relative;
+    width: 84px; height: 84px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    /* Glassmorphism base */
+    background: radial-gradient(circle at 40% 35%, rgba(30,30,80,0.95), rgba(15,15,50,0.98));
+    border: 2px solid rgba(240,192,64,0.5);
+    box-shadow:
+      0 0 25px 5px rgba(240,192,64,0.2),
+      0 0 60px 10px rgba(240,192,64,0.08),
+      0 8px 32px rgba(0,0,0,0.6),
+      inset 0 1px 0 rgba(255,255,255,0.1),
+      inset 0 -2px 6px rgba(0,0,0,0.4);
+    animation: orbFloat 3s ease-in-out infinite;
+  }
+  
+  @media (max-width: 850px) {
+    /* Center the orb in the gap between board edge and score card */
+    .hand-display {
+      bottom: auto;
+      top: calc(100% + 40px); /* 40px sits well in the dynamic gap */
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    .hand-display.top-side {
+      top: auto;
+      bottom: calc(100% + 40px);
+      transform: translateX(-50%);
+    }
+    .hand-orb {
+      width: 90px; height: 90px; /* Increased orb size again as requested */
+    }
+    .hand-count { font-size: 1.1rem; }
+  }
+  .hand-display.top-side .hand-label-text {
+    order: -1;
+    margin-top: 0;
+    margin-bottom: 4px;
+  }
+
+  @keyframes orbFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
+
+  /* Rotating ring around the orb */
+  .hand-orb::before {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    border: 2px dashed rgba(240,192,64,0.3);
+    animation: orbRingSpin 8s linear infinite;
+    pointer-events: none;
+  }
+
+  /* Outer glow ring */
+  .hand-orb::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    background: transparent;
+    border: 1px solid rgba(240,192,64,0.15);
+    animation: orbGlowPulse 2s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes orbRingSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes orbGlowPulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(240,192,64,0.15); }
+    50% { box-shadow: 0 0 20px rgba(240,192,64,0.35); }
+  }
+
+  /* Count number in the center */
+  .hand-count {
+    font-size: 1.6rem;
+    font-weight: 900;
+    color: var(--accent);
+    text-shadow:
+      0 0 12px rgba(240,192,64,0.6),
+      0 0 30px rgba(240,192,64,0.2);
+    line-height: 1;
+    z-index: 3;
+    position: relative;
+  }
+
+  /* Small grain dots orbiting inside the circle */
+  .hand-grain-ring {
+    position: absolute;
+    inset: 4px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .hand-grain-dot {
+    position: absolute;
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #ffe070, var(--grain));
+    box-shadow: 0 0 4px rgba(240,192,64,0.6);
+    transform: translate(-50%, -50%);
+    animation: grainAppear .25s ease both;
+  }
+  @keyframes grainAppear {
+    0% { transform: translate(-50%,-50%) scale(0); opacity: 0; }
+    100% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+  }
+
+  /* "IN HAND" label below the orb */
+  .hand-label-text {
+    display: none; /* Removed as requested */
+  }
+
+  /* Active turn row highlight */
+  .pit-row.active-turn {
+    background: rgba(255,255,255,0.02);
+    border-radius: 36px;
+    box-shadow: 0 0 15px rgba(255,255,255,0.05), inset 0 0 10px rgba(255,255,255,0.02);
+    animation: rowPulse 3s ease-in-out infinite;
+  }
+  @keyframes rowPulse {
+    0%, 100% { box-shadow: 0 0 15px rgba(255,255,255,0.05); }
+    50% { box-shadow: 0 0 25px rgba(255,255,255,0.1), inset 0 0 15px rgba(255,255,255,0.04); }
+  }
+
+  /* Dead pit (not filled at round start — skipped during distribution) */
+  .pit.dead {
+    opacity: 0.15;
+    filter: saturate(0.2);
+    pointer-events: none !important;
+    cursor: default !important;
+    border-style: dashed !important;
+    border-color: rgba(255,255,255,0.2) !important;
+    box-shadow: none !important;
+  }
+  .pit.dead .pit-count { display: none; }
+  .pit.dead .grain-dots { display: none; }
+
+  /* Round indicator */
+  .round-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  /* ── CONTROLS & STATUS ─────────────────────── */
+  .controls {
+    flex-shrink: 0;
+    display: flex; justify-content: center; gap: 12px;
+    padding: 8px 16px 16px; z-index: 2;
+  }
+
+  .btn {
+    padding: 12px 28px; border: none; border-radius: 16px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 2px;
+    cursor: pointer;
+    transition: all .3s cubic-bezier(.34,1.56,.64,1);
+    position: relative; overflow: hidden;
+  }
+  .btn::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+    pointer-events: none;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, #fbbf24, #d97706);
+    color: #000;
+    box-shadow: 0 4px 15px rgba(251, 191, 36, 0.3);
+  }
+  .btn-primary:active { transform: scale(0.92); box-shadow: 0 2px 8px rgba(251, 191, 36, 0.4); }
+
+  .btn-secondary {
+    background: rgba(255,255,255,0.05);
+    color: var(--text-main); border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+  }
+  .btn-secondary:active { transform: scale(0.92); background: rgba(255,255,255,0.08); }
+
+  .status-bar {
+    flex-shrink: 0;
+    text-align: center; padding: 4px; z-index: 2;
+    font-size: 0.75rem; color: var(--text-dim); font-weight: 600;
+    min-height: 22px;
+  }
+
+  /* ── PREMIUM MODALS (Vision OS Style) ─────────────────────────────────── */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+    opacity: 0; pointer-events: none;
+    transition: opacity .4s ease;
+  }
+  .modal-overlay.show { opacity: 1; pointer-events: auto; }
+
+  .modal {
+    background: rgba(22, 17, 36, 0.6); /* Very sheer dark glass */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 32px;
+    padding: 36px 30px;
+    text-align: center;
+    max-width: 380px; width: 100%;
+    transform: scale(0.85) translateY(40px);
+    transition: transform .5s cubic-bezier(.34,1.56,.64,1);
+    box-shadow:
+      0 30px 60px rgba(0,0,0,0.6),
+      inset 0 1px 1px rgba(255,255,255,0.15);
+    position: relative;
+    overflow: hidden;
+  }
+  .modal::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle at top right, rgba(251, 191, 36, 0.1), transparent 60%);
+    pointer-events: none;
+  }
+  .modal-overlay.show .modal { transform: scale(1) translateY(0); }
+
+  .modal-icon { font-size: 3.5rem; margin-bottom: 12px; filter: drop-shadow(0 4px 10px rgba(251, 191, 36, 0.3)); }
+  .modal h2 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.8rem; font-weight: 800; margin-bottom: 8px;
+    background: linear-gradient(135deg, #fff, #fbbf24);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.5px;
+  }
+  .modal p { font-family: 'Inter', sans-serif; font-size: 0.9rem; color: var(--text-dim); margin-bottom: 24px; line-height: 1.6; }
+  .modal .btn { width: 100%; margin-top: 8px; }
+
+  .mode-select { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+  .difficulty-select { display: flex; justify-content: center; gap: 8px; margin-bottom: 24px; }
+  .difficulty-btn {
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-dim); padding: 8px 16px; border-radius: 12px;
+    font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: all .2s;
+  }
+  .difficulty-btn.active {
+    background: rgba(251, 191, 36, 0.1); border-color: var(--accent); color: var(--accent);
+    box-shadow: 0 0 15px rgba(251, 191, 36, 0.2);
+  }
+
+  /* Round Summary Data Grid */
+  .round-summary {
+    display: flex; justify-content: space-around;
+    padding: 16px 0; margin-bottom: 24px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .round-stat { display: flex; flex-direction: column; align-items: center; }
+  .round-stat .label { font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+  .round-stat .val { font-family: 'Inter', sans-serif; font-size: 1.8rem; font-weight: 900; color: var(--text); }
+  .round-stat.player1 .val { color: var(--opponent-accent); text-shadow: 0 0 10px var(--opponent-glow); }
+  .round-stat.player2 .val { color: var(--player-accent); text-shadow: 0 0 10px var(--player-glow); }
+  /* ── RIPPLE ───────────────────────────────── */
+  .ripple {
+    position: absolute; border-radius: 50%;
+    background: rgba(240,192,64,0.25);
+    transform: scale(0); animation: rippleAnim .6s ease-out;
+    pointer-events: none; z-index: 10;
+  }
+  @keyframes rippleAnim {
+    to { transform: scale(3); opacity: 0; }
+  }
+
+  /* ── CONFETTI ─────────────────────────────── */
+  .confetti-piece {
+    position: fixed; z-index: 200; pointer-events: none;
+    width: 8px; height: 8px;
+    animation: confettiFall 2.5s ease-out forwards;
+  }
+  @keyframes confettiFall {
+    0% { opacity: 1; transform: translateY(0) rotate(0deg) scale(1); }
+    100% { opacity: 0; transform: translateY(100vh) rotate(720deg) scale(0.3); }
+  }
+
+  /* ── RESPONSIVE ───────────────────────────── */
+  @media (max-height: 650px) {
+    .header { padding: 6px 16px 2px; }
+    .header h1 { font-size: 1.2rem; }
+    .scoreboard { padding: 4px 12px; }
+    .score-card { padding: 4px 14px; }
+    .score-value { font-size: 1.4rem; }
+    .board { padding: 8px 6px; }
+    .pit-row { gap: 3px; }
+    .hand-orb { width: 56px; height: 56px; }
+    .hand-count { font-size: 1.2rem; }
+    .hand-display { bottom: -24px; }
+    .controls { padding: 4px 16px 8px; }
+  }
+
+  @media (min-width: 500px) {
+    .pit-count { font-size: 1.3rem; }
+    .grain-dot { width: 8px; height: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- Elegant Watermark -->
+  <div class="bg-watermark"></div>
+
+  <!-- Background particles -->
+  <div class="bg-particles" id="bgParticles"></div>
+  
+  <!-- Ambient Light Pools -->
+  <div class="ambient-pool ambient-opp"></div>
+  <div class="ambient-pool ambient-player"></div>
+
+  <!-- Header -->
+  <div class="header">
+    <h1>Pallankuzhi</h1>
+  </div>
+
+  <!-- Scoreboard (turn indicator only) -->
+  <div class="scoreboard">
+    <div class="turn-indicator">
+      <span class="turn-text" id="turnText">Your Turn</span>
+      <span class="turn-dot" id="turnDot"></span>
+      <span class="round-badge" id="roundBadge">Round 1</span>
+    </div>
+  </div>
+
+  <!-- Board -->
+  <div class="board-wrapper">
+    <div class="mobile-layout-stack">
+      <!-- Player 1 (opp) score card -->
+      <div class="board-score-card opponent" id="scoreCardOpp">
+        <span class="score-label" id="labelOpp">Opponent</span>
+        <span class="score-value" id="scoreOpp">0</span>
+      </div>
+
+      <div class="board" id="board">
+        <div class="pit-row" id="rowOpponent"></div>
+        <div class="board-divider"></div>
+        <div class="pit-row" id="rowPlayer"></div>
+
+        <!-- Hand display (floating circle on the board) -->
+        <div class="hand-display" id="handDisplay">
+          <div class="hand-orb">
+            <div class="hand-grain-ring" id="handGrainRing"></div>
+            <span class="hand-count" id="handCount"></span>
+          </div>
+          <span class="hand-label-text">In Hand</span>
+        </div>
+      </div>
+
+      <!-- Player 2 (player) score card -->
+      <div class="board-score-card player" id="scoreCardPlayer">
+        <span class="score-label" id="labelPlayer">You</span>
+        <span class="score-value" id="scorePlayer">0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="status-bar" id="statusBar">Tap a pit on your side to begin</div>
+
+  <button class="new-game-btn" onclick="showNewGameModal()" title="Start New Game">
+    <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M23 4v6h-6"></path>
+      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+    </svg>
+  </button>
+</div>
+
+<!-- Game Over Modal -->
+<div class="modal-overlay" id="gameOverModal">
+  <div class="modal">
+    <div class="modal-icon" id="modalIcon">🏆</div>
+    <h2 id="modalTitle">Game Over</h2>
+    <p id="modalMessage">Result message</p>
+    <button class="btn btn-primary" onclick="resetGame()">Play Again</button>
+  </div>
+</div>
+
+<!-- Round End Modal -->
+<div class="modal-overlay" id="roundEndModal">
+  <div class="modal">
+    <div class="modal-icon">🔄</div>
+    <h2 id="roundEndTitle">Round Complete!</h2>
+    <p id="roundEndMessage">Round summary</p>
+    <div id="roundEndDetails" style="text-align:left; font-size:0.78rem; background:rgba(255,255,255,0.04); border-radius:10px; padding:12px; margin:10px 0; color:var(--text-dim); line-height:1.8;"></div>
+    <button class="btn btn-primary" onclick="startNextRound()" style="width:100%">Next Round →</button>
+  </div>
+</div>
+
+<!-- New Game / Mode Selection Modal -->
+<div class="modal-overlay show" id="newGameModal">
+  <div class="modal">
+    <div class="modal-icon">🎮</div>
+    <h2>Pallankuzhi</h2>
+    <p id="modeSubtitle">Choose Game Mode</p>
+
+    <!-- Mode Selection -->
+    <div id="modeSelectView">
+      <div class="mode-select">
+        <button class="btn btn-primary" onclick="chooseSinglePlayer()" style="width:100%">🤖 Single Player</button>
+        <button class="btn btn-secondary" onclick="chooseTwoPlayer()" style="width:100%; border-color:var(--player-accent); color:var(--player-accent)">👥 Two Player</button>
+      </div>
+    </div>
+
+    <!-- Difficulty Selection (shown after choosing Single Player) -->
+    <div id="diffSelectView" style="display:none">
+      <p style="font-size:0.85rem; font-weight:600; color:var(--text-dim); margin-bottom:12px; text-transform:uppercase; letter-spacing:1px;">Select Difficulty</p>
+      <div class="difficulty-select">
+        <button class="difficulty-btn" data-level="1" onclick="selectDifficulty(1)">Easy</button>
+        <button class="difficulty-btn active" data-level="3" onclick="selectDifficulty(3)">Medium</button>
+        <button class="difficulty-btn" data-level="7" onclick="selectDifficulty(7)">Hard</button>
+      </div>
+      <button class="btn btn-primary" onclick="startNewGame()" style="margin-top:12px; width:100%">Start Game</button>
+      <button class="btn btn-secondary" onclick="backToModeSelect()" style="margin-top:8px; width:100%">← Back</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  GAME STATE
+// ═══════════════════════════════════════════════
+const PITS_PER_SIDE = 7;
+const INITIAL_GRAINS = 5;
+const GRAIN_FLY_MS = 350;     // Time for grain to fly to destination pit
+const GRAIN_STAGGER_MS = 70;  // Stagger between each grain departure
+const ANIM_PICK_MS = 500;     // Picking animation duration
+const ANIM_CAPTURE_MS = 400;  // Capture animation duration
+const ANIM_SETTLE_MS = 150;   // Settle time after grains land
+
+let board = { opp: [], player: [] }; // opp[0..6] = pits 1-7, player[0..6] = pits 1-7
+let scores = { player: 0, opp: 0 };
+let isPlayerTurn = true;
+let isAnimating = false;
+let aiDepth = 3;
+let pendingDifficulty = 3;
+let gameOver = false;
+let gameMode = 'single'; // 'single', 'two', 'pro'
+
+// Multi-round state
+let roundNumber = 1;
+let bankedGrains = { player: 0, opp: 0 };
+let deadPits = { opp: Array(PITS_PER_SIDE).fill(false), player: Array(PITS_PER_SIDE).fill(false) };
+let lastTurnSide = null; // Tracks who played last in the round
+let pendingTimeouts = []; // Track all setTimeouts for reliable reset
+
+// ─── Helper to track timeouts for cleanup ───
+function safeTimeout(fn, ms) {
+  const id = setTimeout(() => {
+    pendingTimeouts = pendingTimeouts.filter(t => t !== id);
+    fn();
+  }, ms);
+  pendingTimeouts.push(id);
+  return id;
+}
+
+function clearAllTimeouts() {
+  pendingTimeouts.forEach(id => clearTimeout(id));
+  pendingTimeouts = [];
+}
+
+// ═══════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════
+function initBoard() {
+  clearAllTimeouts();
+  board.opp = Array(PITS_PER_SIDE).fill(INITIAL_GRAINS);
+  board.player = Array(PITS_PER_SIDE).fill(INITIAL_GRAINS);
+  scores = { player: 0, opp: 0 };
+  isPlayerTurn = true;
+  gameOver = false;
+  isAnimating = false;
+  roundNumber = 1;
+  bankedGrains = { player: 0, opp: 0 };
+  deadPits = { opp: Array(PITS_PER_SIDE).fill(false), player: Array(PITS_PER_SIDE).fill(false) };
+  lastTurnSide = null;
+  
+  // Clear any lingering UI highlights from previous games
+  document.querySelectorAll('.pit').forEach(p => p.classList.remove('last-picked', 'dead'));
+}
+
+function buildDOM() {
+  const rowOpp = document.getElementById('rowOpponent');
+  const rowPlayer = document.getElementById('rowPlayer');
+  rowOpp.innerHTML = '';
+  rowPlayer.innerHTML = '';
+
+  for (let i = 0; i < PITS_PER_SIDE; i++) {
+    rowOpp.appendChild(createPitEl('opp', i));
+    rowPlayer.appendChild(createPitEl('player', i));
+  }
+  createBgParticles();
+}
+
+function createPitEl(side, idx) {
+  const pit = document.createElement('div');
+  pit.className = 'pit';
+  pit.id = `pit-${side}-${idx}`;
+  pit.dataset.side = side;
+  pit.dataset.idx = idx;
+
+  const count = document.createElement('div');
+  count.className = 'pit-count';
+  count.id = `count-${side}-${idx}`;
+  pit.appendChild(count);
+
+  const dots = document.createElement('div');
+  dots.className = 'grain-dots';
+  dots.id = `dots-${side}-${idx}`;
+  pit.appendChild(dots);
+
+  const num = document.createElement('div');
+  num.className = 'pit-number';
+  num.textContent = idx + 1;
+  pit.appendChild(num);
+
+  if (side === 'player') {
+    pit.addEventListener('click', () => onPitClick(idx));
+    pit.addEventListener('touchstart', (e) => { e.preventDefault(); onPitClick(idx); }, { passive: false });
+  } else {
+    pit.addEventListener('click', () => onOppPitClick(idx));
+    pit.addEventListener('touchstart', (e) => { e.preventDefault(); onOppPitClick(idx); }, { passive: false });
+  }
+
+  return pit;
+}
+
+function createBgParticles() {
+  const container = document.getElementById('bgParticles');
+  container.innerHTML = '';
+  for (let i = 0; i < 8; i++) {
+    const span = document.createElement('span');
+    const size = 60 + Math.random() * 120;
+    span.style.width = size + 'px';
+    span.style.height = size + 'px';
+    span.style.left = Math.random() * 100 + '%';
+    span.style.top = Math.random() * 100 + '%';
+    span.style.animationDelay = (Math.random() * 10) + 's';
+    span.style.animationDuration = (15 + Math.random() * 15) + 's';
+    container.appendChild(span);
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  RENDERING
+// ═══════════════════════════════════════════════
+function renderAll() {
+  for (let i = 0; i < PITS_PER_SIDE; i++) {
+    renderPit('opp', i);
+    renderPit('player', i);
+  }
+  renderScores();
+  renderTurn();
+  renderHand(0);
+  updateClickable();
+}
+
+function renderPit(side, idx) {
+  const val = board[side][idx];
+  const countEl = document.getElementById(`count-${side}-${idx}`);
+  const dotsEl = document.getElementById(`dots-${side}-${idx}`);
+  const pitEl = document.getElementById(`pit-${side}-${idx}`);
+
+  countEl.textContent = val;
+  pitEl.classList.toggle('empty', val === 0);
+  pitEl.classList.toggle('dead', isDeadPit(side, idx));
+
+  // Render grain dots
+  dotsEl.innerHTML = '';
+  const display = Math.min(val, 20); // Cap visual dots
+  if (display === 0) return;
+
+  // Measure pit to calculate exact midpoint radius
+  const pitW = pitEl.offsetWidth || 50;
+  const outerR = pitW / 2;          // Pit border radius in px
+  const innerR = 14;                 // Inner number circle radius (28px / 2)
+  const midR = (outerR + innerR) / 2; // Exact midpoint in px
+  const radiusPct = (midR / pitW) * 100; // Convert to % of pit width
+
+  const positions = getGrainPositions(display, radiusPct);
+  for (let g = 0; g < display; g++) {
+    const dot = document.createElement('div');
+    dot.className = 'grain-dot';
+    dot.style.left = positions[g].x + '%';
+    dot.style.top = positions[g].y + '%';
+    dotsEl.appendChild(dot);
+  }
+}
+
+function getGrainPositions(count, radiusPct) {
+  const positions = [];
+  if (count === 0) return positions;
+  const r = radiusPct || 35; // Fallback
+  const startAngle = -Math.PI / 2; // Start from 12 o'clock
+
+  // All dots placed on a single perfect circle, equal angular gaps
+  for (let i = 0; i < count; i++) {
+    const angle = startAngle + (i / count) * Math.PI * 2;
+    positions.push({
+      x: 50 + Math.cos(angle) * r,
+      y: 50 + Math.sin(angle) * r
+    });
+  }
+  return positions;
+}
+
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+}
+
+function renderScores() {
+  document.getElementById('scorePlayer').textContent = scores.player;
+  document.getElementById('scoreOpp').textContent = scores.opp;
+}
+
+function renderTurn() {
+  const turnText = document.getElementById('turnText');
+  const dot = document.getElementById('turnDot');
+  const cardP = document.getElementById('scoreCardPlayer');
+  const cardO = document.getElementById('scoreCardOpp');
+
+  if (gameOver) {
+    turnText.textContent = 'Game Over';
+    dot.style.background = 'var(--text-dim)';
+    cardP.classList.remove('active');
+    cardO.classList.remove('active');
+  } else if (isPlayerTurn) {
+    if (gameMode === 'two') {
+      turnText.textContent = 'Player 2\'s Turn';
+    } else {
+      turnText.textContent = 'Your Turn';
+    }
+    dot.style.background = 'var(--player-accent)';
+    cardP.classList.add('active');
+    cardO.classList.remove('active');
+  } else {
+    if (gameMode === 'two') {
+      turnText.textContent = 'Player 1\'s Turn';
+    } else {
+      turnText.textContent = 'AI Thinking...';
+    }
+    dot.style.background = 'var(--opponent-accent)';
+    cardO.classList.add('active');
+    cardP.classList.remove('active');
+  }
+}
+
+function renderHand(count) {
+  const display = document.getElementById('handDisplay');
+  const countEl = document.getElementById('handCount');
+  const ring = document.getElementById('handGrainRing');
+
+  if (count > 0) {
+    display.classList.add('visible');
+    countEl.textContent = count;
+
+    // Render small grain dots orbiting inside the circle
+    ring.innerHTML = '';
+    const show = Math.min(count, 12);
+    const radius = 42; // % from center
+    for (let i = 0; i < show; i++) {
+      const angle = -Math.PI / 2 + (i / show) * Math.PI * 2;
+      const dot = document.createElement('div');
+      dot.className = 'hand-grain-dot';
+      dot.style.left = (50 + Math.cos(angle) * radius) + '%';
+      dot.style.top = (50 + Math.sin(angle) * radius) + '%';
+      dot.style.animationDelay = (i * 0.03) + 's';
+      ring.appendChild(dot);
+    }
+  } else {
+    display.classList.remove('visible');
+    countEl.textContent = '';
+    ring.innerHTML = '';
+  }
+}
+
+// Position the hand orb on the correct side of the board
+function positionHandForSide(side) {
+  const display = document.getElementById('handDisplay');
+  if (side === 'opp') {
+    display.classList.add('top-side');
+  } else {
+    display.classList.remove('top-side');
+  }
+}
+
+function updateClickable() {
+  const rowPlayer = document.getElementById('rowPlayer');
+  const rowOpp = document.getElementById('rowOpponent');
+
+  for (let i = 0; i < PITS_PER_SIDE; i++) {
+    const playerPit = document.getElementById(`pit-player-${i}`);
+    const oppPit = document.getElementById(`pit-opp-${i}`);
+    // Dead pits are never clickable
+    const playerDead = isDeadPit('player', i);
+    const oppDead = isDeadPit('opp', i);
+    // Player side clickable
+    playerPit.classList.toggle('clickable', !playerDead && isPlayerTurn && !isAnimating && !gameOver && board.player[i] > 0);
+    // Opponent side clickable only in two-player mode when it's opponent's turn
+    if (gameMode === 'two') {
+      oppPit.classList.toggle('clickable', !oppDead && !isPlayerTurn && !isAnimating && !gameOver && board.opp[i] > 0);
+    } else {
+      oppPit.classList.remove('clickable');
+    }
+  }
+
+  // Highlight the active player's row
+  if (gameOver || isAnimating) {
+    rowPlayer.classList.remove('active-turn');
+    rowOpp.classList.remove('active-turn');
+  } else if (isPlayerTurn) {
+    rowPlayer.classList.add('active-turn');
+    rowOpp.classList.remove('active-turn');
+  } else {
+    rowOpp.classList.add('active-turn');
+    rowPlayer.classList.remove('active-turn');
+  }
+
+  // Add semantic turn classes to body for ambient background lighting
+  if (gameOver) {
+    document.body.classList.remove('turn-player', 'turn-opp');
+  } else if (isPlayerTurn) {
+    document.body.classList.add('turn-player');
+    document.body.classList.remove('turn-opp');
+  } else {
+    document.body.classList.add('turn-opp');
+    document.body.classList.remove('turn-player');
+  }
+}
+
+function setStatus(msg) {
+  document.getElementById('statusBar').textContent = msg;
+}
+
+// ═══════════════════════════════════════════════
+//  CLOCKWISE ORDER
+// ═══════════════════════════════════════════════
+// Pits in clockwise order:
+// opp[0], opp[1], ..., opp[6], player[0], player[1], ..., player[6]
+// Total 14 pits, indexes 0-13
+
+// Clockwise: Player 1→2→...→7 → Opponent 7→6→...→1 → back to Player 1
+// Linear 0-6 = player[0..6], Linear 7-13 = opp[6..0]
+
+function pitToLinear(side, idx) {
+  if (side === 'player') return idx;           // player[0-6] → linear 0-6
+  return 7 + (6 - idx);                        // opp[0] → 13, opp[6] → 7
+}
+
+function linearToPit(linear) {
+  linear = ((linear % 14) + 14) % 14;
+  if (linear < 7) return { side: 'player', idx: linear };
+  return { side: 'opp', idx: 6 - (linear - 7) }; // linear 7 → opp[6], linear 13 → opp[0]
+}
+
+// Check if a pit is dead (not filled at round start, skipped during distribution)
+function isDeadPit(side, idx) {
+  return deadPits[side][idx] === true;
+}
+
+// Advance to the next live (non-dead) pit in clockwise order
+function getNextLivePit(currentLinear) {
+  let steps = 0;
+  let next = currentLinear;
+  do {
+    next = (next + 1) % 14;
+    steps++;
+    const p = linearToPit(next);
+    if (!isDeadPit(p.side, p.idx)) return next;
+  } while (steps < 14); // Safety: avoid infinite loop if all pits are dead
+  return (currentLinear + 1) % 14; // Fallback
+}
+
+function getPitValue(side, idx) {
+  return board[side][idx];
+}
+
+function setPitValue(side, idx, val) {
+  board[side][idx] = val;
+}
+
+// ═══════════════════════════════════════════════
+//  GAME LOGIC (with animation hooks)
+// ═══════════════════════════════════════════════
+function onPitClick(idx) {
+  if (!isPlayerTurn || isAnimating || gameOver) return;
+  if (board.player[idx] === 0) return;
+
+  isAnimating = true;
+  updateClickable();
+  executeTurn('player', idx, true);
+}
+
+// ─── Get center point of a pit element (viewport coords) ───
+function getPitCenter(side, idx) {
+  const el = document.getElementById(`pit-${side}-${idx}`);
+  if (!el) return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+
+// ─── Get center of the hand display area ───
+function getHandCenter() {
+  const orb = document.querySelector('.hand-orb');
+  if (!orb) return { x: window.innerWidth / 2, y: window.innerHeight - 80 };
+  const r = orb.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+
+// ─── Create a flying grain element ───
+function createFlyingGrain(x, y) {
+  const grain = document.createElement('div');
+  grain.className = 'flying-grain';
+  grain.style.left = (x - 6) + 'px';
+  grain.style.top = (y - 6) + 'px';
+  document.body.appendChild(grain);
+  return grain;
+}
+
+// ─── Spawn a tiny landing burst effect ───
+function spawnLandBurst(x, y) {
+  const burst = document.createElement('div');
+  burst.className = 'grain-land-burst';
+  burst.style.left = x + 'px';
+  burst.style.top = y + 'px';
+  document.body.appendChild(burst);
+  setTimeout(() => burst.remove(), 400);
+}
+
+// ─── Fly a single grain from src to dest with arc ───
+function flyGrainTo(srcX, srcY, destX, destY, duration) {
+  return new Promise(resolve => {
+    const grain = createFlyingGrain(srcX, srcY);
+
+    // Force layout so the initial position is painted
+    void grain.offsetHeight;
+
+    // Add transition class and move
+    grain.classList.add('in-flight');
+    grain.style.left = (destX - 6) + 'px';
+    grain.style.top = (destY - 6) + 'px';
+
+    // Spawn trail dots along the path
+    let trailCount = 0;
+    const trailInterval = setInterval(() => {
+      if (trailCount >= 3) { clearInterval(trailInterval); return; }
+      const t = (trailCount + 1) / 4;
+      const tx = srcX + (destX - srcX) * t;
+      const ty = srcY + (destY - srcY) * t - Math.sin(t * Math.PI) * 15;
+      const trail = document.createElement('div');
+      trail.className = 'grain-trail';
+      trail.style.left = (tx - 2.5) + 'px';
+      trail.style.top = (ty - 2.5) + 'px';
+      document.body.appendChild(trail);
+      safeTimeout(() => trail.remove(), 500);
+      trailCount++;
+    }, duration / 5);
+
+    safeTimeout(() => {
+      clearInterval(trailInterval);
+      grain.remove();
+      spawnLandBurst(destX, destY);
+      resolve();
+    }, duration);
+  });
+}
+
+// ─── Fly grains from a pit to the hand area (collecting) ───
+function flyGrainsToHand(side, idx, count) {
+  return new Promise(resolve => {
+    const src = getPitCenter(side, idx);
+    const hand = getHandCenter();
+    const displayCount = Math.min(count, 12); // Cap visual grains
+
+    for (let i = 0; i < displayCount; i++) {
+      safeTimeout(() => {
+        const g = document.createElement('div');
+        g.className = 'collecting-grain';
+        // Scatter from random positions within the pit
+        const angle = (i / displayCount) * Math.PI * 2;
+        const scatter = 8 + Math.random() * 6;
+        const sx = src.x + Math.cos(angle) * scatter;
+        const sy = src.y + Math.sin(angle) * scatter;
+        g.style.left = (sx - 5) + 'px';
+        g.style.top = (sy - 5) + 'px';
+        document.body.appendChild(g);
+
+        // Force layout then fly to hand
+        void g.offsetHeight;
+        g.style.left = (hand.x - 5 + (Math.random() - 0.5) * 30) + 'px';
+        g.style.top = (hand.y - 5) + 'px';
+        g.style.opacity = '0.6';
+
+        safeTimeout(() => g.remove(), 380);
+      }, i * 30);
+    }
+
+    // Wait for last grain to finish flying
+    safeTimeout(resolve, displayCount * 30 + 380);
+  });
+}
+
+// ─── Distribute grains: fly them from hand to each pit sequentially ───
+async function distributeGrainsAnimated(sourceSide, sourceIdx, destinations) {
+  // destinations is an array of {side, idx} in order
+  const handPos = getHandCenter();
+
+  for (let i = 0; i < destinations.length; i++) {
+    const dest = destinations[i];
+    const destPos = getPitCenter(dest.side, dest.idx);
+
+    // Fly a grain from hand area to the destination pit
+    const flyPromise = flyGrainTo(
+      handPos.x + (Math.random() - 0.5) * 20,
+      handPos.y + (Math.random() - 0.5) * 8,
+      destPos.x,
+      destPos.y,
+      GRAIN_FLY_MS
+    );
+
+    // Decrement hand count immediately as grain leaves
+    renderHand(destinations.length - i - 1);
+
+    // Wait for grain to land before sending the next one
+    await flyPromise;
+
+    // Update game state exactly as it lands
+    board[dest.side][dest.idx]++;
+    renderPit(dest.side, dest.idx);
+    triggerAnim(`pit-${dest.side}-${dest.idx}`, 'dropping');
+
+    // Check INSTANT-4 CAPTURE RULE immediately
+    if (board[dest.side][dest.idx] === 4) {
+      const owner = dest.side === 'player' ? 'player' : 'opp';
+      return { stoppedAt: i, instant4: { side: dest.side, idx: dest.idx, owner } };
+    }
+
+    // Small pause between grains for visual clarity
+    await sleep(GRAIN_STAGGER_MS);
+  }
+
+  return { stoppedAt: destinations.length - 1, instant4: null };
+}
+
+async function executeTurn(side, pitIdx, animate) {
+  const startLinear = pitToLinear(side, pitIdx);
+  let hand = board[side][pitIdx];
+  board[side][pitIdx] = 0;
+  lastTurnSide = side; // Track who played last for turn order
+
+  if (animate) {
+    // Position hand orb on correct side of board and make it visible
+    positionHandForSide(side);
+    // Show the orb (empty) so its position is correct for grain flight
+    const display = document.getElementById('handDisplay');
+    display.classList.add('visible');
+    document.getElementById('handCount').textContent = '';
+    document.getElementById('handGrainRing').innerHTML = '';
+    // Force layout so position is calculated
+    void display.offsetHeight;
+
+    // Mark last picked pit
+    clearLastPicked();
+    markLastPicked(side, pitIdx);
+    triggerAnim(`pit-${side}-${pitIdx}`, 'picking');
+    renderPit(side, pitIdx);
+
+    // Fly grains from pit to hand
+    await flyGrainsToHand(side, pitIdx, hand);
+    renderHand(hand);
+    await sleep(200);
+  }
+
+  let currentLinear = startLinear;
+  let turnScores = { player: 0, opp: 0 };
+
+  while (true) {
+    if (animate) {
+      // Build list of destination pits for this batch of distribution
+      const destinations = [];
+      let tempLinear = currentLinear;
+      for (let g = 0; g < hand; g++) {
+        tempLinear = getNextLivePit(tempLinear);
+        const p = linearToPit(tempLinear);
+        destinations.push({ side: p.side, idx: p.idx });
+      }
+
+      // Animate all grains flying to their destinations
+      const result = await distributeGrainsAnimated(side, pitIdx, destinations);
+
+      // Update currentLinear to wherever we stopped
+      let advancedLinear = currentLinear;
+      for (let s = 0; s <= result.stoppedAt; s++) {
+        advancedLinear = getNextLivePit(advancedLinear);
+      }
+      currentLinear = advancedLinear;
+      hand = 0;
+
+      // Handle instant-4 if it occurred
+      if (result.instant4) {
+        const { side: i4Side, idx: i4Idx, owner } = result.instant4;
+        scores[owner] += 4;
+        turnScores[owner] += 4;
+        board[i4Side][i4Idx] = 0;
+
+        triggerAnim(`pit-${i4Side}-${i4Idx}`, 'instant4');
+        showScoreFly(i4Side, i4Idx, '+4', owner);
+        renderPit(i4Side, i4Idx);
+        renderScores();
+        await sleep(350);
+
+        // Need to continue distributing remaining grains after instant-4
+        const remaining = destinations.length - result.stoppedAt - 1;
+        if (remaining > 0) {
+          hand = remaining;
+          // We already updated board for grains up to stoppedAt.
+          // But grains after stoppedAt were NOT yet added to board.
+          // Let's recalculate: the remaining dests haven't been applied yet.
+          // Actually, distributeGrainsAnimated applies board changes one at a time
+          // and stops early on instant-4. So remaining grains ARE still in hand.
+          renderHand(hand);
+          // Continue the while loop to distribute remaining
+          continue;
+        }
+      }
+
+      await sleep(ANIM_SETTLE_MS);
+    } else {
+      // Non-animated: just do the logic
+      while (hand > 0) {
+        currentLinear = getNextLivePit(currentLinear);
+        const p = linearToPit(currentLinear);
+        board[p.side][p.idx]++;
+        hand--;
+
+        if (board[p.side][p.idx] === 4) {
+          const owner = p.side === 'player' ? 'player' : 'opp';
+          scores[owner] += 4;
+          turnScores[owner] += 4;
+          board[p.side][p.idx] = 0;
+        }
+      }
+    }
+
+    // CHAIN PICK RULE
+    const nextLinear = getNextLivePit(currentLinear);
+    const nextPit = linearToPit(nextLinear);
+
+    if (board[nextPit.side][nextPit.idx] > 0) {
+      // Pick up from next pit and continue
+      hand = board[nextPit.side][nextPit.idx];
+      board[nextPit.side][nextPit.idx] = 0;
+      currentLinear = nextLinear;
+
+      if (animate) {
+        // Move hand orb to the side of the chain-pick
+        positionHandForSide(side);
+        // Show empty orb for correct position
+        const display = document.getElementById('handDisplay');
+        display.classList.add('visible');
+        document.getElementById('handCount').textContent = '';
+        document.getElementById('handGrainRing').innerHTML = '';
+        void display.offsetHeight;
+
+        clearLastPicked();
+        markLastPicked(nextPit.side, nextPit.idx);
+        triggerAnim(`pit-${nextPit.side}-${nextPit.idx}`, 'picking');
+        renderPit(nextPit.side, nextPit.idx);
+
+        // Fly grains from pit to hand
+        await flyGrainsToHand(nextPit.side, nextPit.idx, hand);
+        renderHand(hand);
+        await sleep(200);
+      }
+    } else {
+      // EMPTY STOP → CAPTURE from the pit AFTER the empty one
+      const captureLinear = getNextLivePit(nextLinear);
+      const capturePit = linearToPit(captureLinear);
+      const capturedGrains = board[capturePit.side][capturePit.idx];
+
+      if (capturedGrains > 0) {
+        // Empty Stop Capture: grains go to CURRENT PLAYER regardless of pit side
+        const owner = side;
+        scores[owner] += capturedGrains;
+        turnScores[owner] += capturedGrains;
+        board[capturePit.side][capturePit.idx] = 0;
+
+        if (animate) {
+          triggerAnim(`pit-${capturePit.side}-${capturePit.idx}`, 'capturing');
+
+          // Fly captured grains to the score area
+          const captSrc = getPitCenter(capturePit.side, capturePit.idx);
+          const scoreEl = document.getElementById(owner === 'player' ? 'scoreCardPlayer' : 'scoreCardOpp');
+          const scoreRect = scoreEl.getBoundingClientRect();
+          const scoreDest = { x: scoreRect.left + scoreRect.width / 2, y: scoreRect.top + scoreRect.height / 2 };
+
+          const capCount = Math.min(capturedGrains, 8);
+          for (let c = 0; c < capCount; c++) {
+            safeTimeout(() => {
+              flyGrainTo(
+                captSrc.x + (Math.random() - 0.5) * 16,
+                captSrc.y + (Math.random() - 0.5) * 16,
+                scoreDest.x,
+                scoreDest.y,
+                300
+              );
+            }, c * 50);
+          }
+
+          showScoreFly(capturePit.side, capturePit.idx, `+${capturedGrains}`, owner);
+          renderPit(capturePit.side, capturePit.idx);
+          renderScores();
+          await sleep(capCount * 50 + 350);
+        }
+      }
+
+      break;
+    }
+  }
+
+  if (animate) {
+    renderHand(0);
+    clearLastPicked();
+    renderAll();
+  }
+
+  return turnScores;
+}
+
+// Non-animated version for AI simulation
+function executeTurnSim(boardState, scoresState, side, pitIdx) {
+  const b = { opp: [...boardState.opp], player: [...boardState.player] };
+  const s = { player: scoresState.player, opp: scoresState.opp };
+
+  // Same clockwise mapping: player[0-6] → linear 0-6, opp[idx] → linear 7+(6-idx)
+  function toLinear(sd, id) {
+    return sd === 'player' ? id : 7 + (6 - id);
+  }
+  function fromLinear(lin) {
+    lin = ((lin % 14) + 14) % 14;
+    if (lin < 7) return { sd: 'player', id: lin };
+    return { sd: 'opp', id: 6 - (lin - 7) };
+  }
+  // Skip dead pits in simulation
+  function nextLive(cur) {
+    let steps = 0, n = cur;
+    do {
+      n = (n + 1) % 14;
+      steps++;
+      const p = fromLinear(n);
+      if (!deadPits[p.sd][p.id]) return n;
+    } while (steps < 14);
+    return (cur + 1) % 14;
+  }
+
+  const startLinear = toLinear(side, pitIdx);
+  let hand = b[side][pitIdx];
+  b[side][pitIdx] = 0;
+  let currentLinear = startLinear;
+
+  while (true) {
+    while (hand > 0) {
+      currentLinear = nextLive(currentLinear);
+      const p = fromLinear(currentLinear);
+      b[p.sd][p.id]++;
+      hand--;
+
+      // Instant-4
+      if (b[p.sd][p.id] === 4) {
+        s[p.sd] += 4;
+        b[p.sd][p.id] = 0;
+      }
+    }
+
+    const nextLinear = nextLive(currentLinear);
+    const n = fromLinear(nextLinear);
+
+    if (b[n.sd][n.id] > 0) {
+      hand = b[n.sd][n.id];
+      b[n.sd][n.id] = 0;
+      currentLinear = nextLinear;
+    } else {
+      const captureLinear = nextLive(nextLinear);
+      const c = fromLinear(captureLinear);
+      const cGrains = b[c.sd][c.id];
+      if (cGrains > 0) {
+        // Empty Stop Capture: grains go to CURRENT PLAYER
+        s[side] += cGrains;
+        b[c.sd][c.id] = 0;
+      }
+      break;
+    }
+  }
+
+  return { board: b, scores: s };
+}
+
+// ═══════════════════════════════════════════════
+//  AI (Minimax with Alpha-Beta)
+// ═══════════════════════════════════════════════
+function getValidMoves(boardState, side) {
+  const moves = [];
+  for (let i = 0; i < PITS_PER_SIDE; i++) {
+    if (boardState[side][i] > 0) moves.push(i);
+  }
+  return moves;
+}
+
+function minimax(boardState, scoresState, depth, alpha, beta, isMaximizing) {
+  // Maximizing = opponent (AI), Minimizing = player
+  const currentSide = isMaximizing ? 'opp' : 'player';
+  const moves = getValidMoves(boardState, currentSide);
+
+  if (depth === 0 || moves.length === 0) {
+    // Primary score: difference in captured grains
+    let evalVal = (scoresState.opp - scoresState.player) * 5;
+
+    // Board Control: +1 per grain on side (weight increased)
+    const oppBoard = boardState.opp.reduce((a, b) => a + b, 0);
+    const playerBoard = boardState.player.reduce((a, b) => a + b, 0);
+    
+    evalVal += oppBoard;
+    evalVal -= playerBoard;
+
+    return evalVal;
+  }
+
+  if (isMaximizing) {
+    let maxEval = -Infinity;
+    for (const move of moves) {
+      const result = executeTurnSim(boardState, scoresState, currentSide, move);
+      const eval_ = minimax(result.board, result.scores, depth - 1, alpha, beta, false);
+      maxEval = Math.max(maxEval, eval_);
+      alpha = Math.max(alpha, eval_);
+      if (beta <= alpha) break;
+    }
+    return maxEval;
+  } else {
+    let minEval = Infinity;
+    for (const move of moves) {
+      const result = executeTurnSim(boardState, scoresState, currentSide, move);
+      const eval_ = minimax(result.board, result.scores, depth - 1, alpha, beta, true);
+      minEval = Math.min(minEval, eval_);
+      beta = Math.min(beta, eval_);
+      if (beta <= alpha) break;
+    }
+    return minEval;
+  }
+}
+
+function getBestAiMove() {
+  const moves = getValidMoves(board, 'opp');
+  if (moves.length === 0) return -1;
+
+  let bestMove = moves[0];
+  let bestScore = -Infinity;
+
+  for (const move of moves) {
+    const result = executeTurnSim(board, scores, 'opp', move);
+    const score = minimax(result.board, result.scores, aiDepth - 1, -Infinity, Infinity, false);
+    if (score > bestScore) {
+      bestScore = score;
+      bestMove = move;
+    }
+  }
+  return bestMove;
+}
+
+// ═══════════════════════════════════════════════
+//  TURN FLOW
+// ═══════════════════════════════════════════════
+async function endTurn() {
+  // Check if a side has no more grains on board (round end condition)
+  const playerBoardTotal = board.player.reduce((a, b) => a + b, 0);
+  const oppBoardTotal = board.opp.reduce((a, b) => a + b, 0);
+
+  if (playerBoardTotal === 0 || oppBoardTotal === 0) {
+    // Remaining grains on board go to the side that owns them as score
+    scores.player += playerBoardTotal;
+    scores.opp += oppBoardTotal;
+    board.player.fill(0);
+    board.opp.fill(0);
+    renderAll();
+    gameOver = true;
+    isAnimating = false;
+    renderTurn();
+    await sleep(500);
+
+    // Calculate each player's total grains (scored + banked from previous rounds)
+    const playerTotalGrains = scores.player + bankedGrains.player;
+    const oppTotalGrains = scores.opp + bankedGrains.opp;
+
+    // Check if either player cannot fill even one pit → MATCH OVER
+    if (playerTotalGrains < INITIAL_GRAINS || oppTotalGrains < INITIAL_GRAINS) {
+      showGameOver(); // Final match winner
+    } else {
+      showRoundEnd(playerTotalGrains, oppTotalGrains);
+    }
+    return;
+  }
+
+  isPlayerTurn = !isPlayerTurn;
+  renderTurn();
+  updateClickable();
+
+  if (gameMode === 'two') {
+    // Two player: just update status, both sides controlled by humans
+    if (isPlayerTurn) {
+      setStatus('Player 2 — tap a pit on your side');
+    } else {
+      setStatus('Player 1 — tap a pit on your side');
+    }
+    isAnimating = false;
+    updateClickable();
+  } else {
+    // Single player: AI takes over
+    if (!isPlayerTurn) {
+      setStatus('AI is thinking...');
+      await sleep(400);
+      await aiTurn();
+    } else {
+      setStatus('Tap a pit on your side');
+      isAnimating = false;
+      updateClickable();
+    }
+  }
+}
+
+async function aiTurn() {
+  const move = getBestAiMove();
+  if (move === -1) {
+    // No moves, end
+    isPlayerTurn = true;
+    isAnimating = false;
+    renderAll();
+    return;
+  }
+
+  setStatus(`AI plays pit ${move + 1}`);
+  await executeTurn('opp', move, true);
+  await endTurn();
+}
+
+// Hook into player turn end
+const origOnPitClick = onPitClick;
+async function playerTurnFlow(idx) {
+  if (!isPlayerTurn || isAnimating || gameOver) return;
+  if (board.player[idx] === 0) return;
+
+  isAnimating = true;
+  updateClickable();
+
+  await executeTurn('player', idx, true);
+  await endTurn();
+}
+
+// Override onPitClick
+function onPitClick(idx) {
+  playerTurnFlow(idx);
+}
+
+// Opponent pit click (two-player mode)
+function onOppPitClick(idx) {
+  if (gameMode !== 'two') return;
+  if (isPlayerTurn || isAnimating || gameOver) return;
+  if (board.opp[idx] === 0) return;
+
+  isAnimating = true;
+  updateClickable();
+  oppTurnFlow(idx);
+}
+
+async function oppTurnFlow(idx) {
+  await executeTurn('opp', idx, true);
+  await endTurn();
+}
+
+// ═══════════════════════════════════════════════
+//  LAST-PICKED INDICATOR
+// ═══════════════════════════════════════════════
+function clearLastPicked() {
+  document.querySelectorAll('.pit.last-picked').forEach(el => el.classList.remove('last-picked'));
+}
+
+function markLastPicked(side, idx) {
+  const el = document.getElementById(`pit-${side}-${idx}`);
+  if (el) el.classList.add('last-picked');
+}
+
+// ═══════════════════════════════════════════════
+//  ANIMATIONS
+// ═══════════════════════════════════════════════
+function triggerAnim(elId, animClass) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.classList.remove(animClass);
+  void el.offsetHeight; // Force reflow
+  el.classList.add(animClass);
+  safeTimeout(() => el.classList.remove(animClass), 700);
+
+  // Extra effects for picking
+  if (animClass === 'picking') {
+    // Expanding ring
+    const ring = document.createElement('div');
+    ring.className = 'pick-ring';
+    el.appendChild(ring);
+    safeTimeout(() => ring.remove(), 750);
+
+    // Burst particles
+    spawnPickBurst(el);
+  }
+}
+
+function spawnPickBurst(pitEl) {
+  const rect = pitEl.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const colors = ['#ffd700', '#f0c040', '#ffed80', '#e8a000', '#fff4b0', '#f5d060'];
+  const count = 8;
+
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2;
+    const dist = 30 + Math.random() * 20;
+    const dx = Math.cos(angle) * dist;
+    const dy = Math.sin(angle) * dist;
+
+    const p = document.createElement('div');
+    p.className = 'pick-particle';
+    p.style.left = cx + 'px';
+    p.style.top = cy + 'px';
+    p.style.background = colors[i % colors.length];
+    p.style.setProperty('--particle-dir', `translate(${dx}px, ${dy}px)`);
+    p.style.animationDelay = (i * 0.03) + 's';
+    p.style.boxShadow = `0 0 6px ${colors[i % colors.length]}`;
+    document.body.appendChild(p);
+    safeTimeout(() => p.remove(), 800);
+  }
+}
+
+function showScoreFly(side, idx, text, owner) {
+  const pitEl = document.getElementById(`pit-${side}-${idx}`);
+  if (!pitEl) return;
+  const rect = pitEl.getBoundingClientRect();
+  const fly = document.createElement('div');
+  fly.className = `score-fly ${owner === 'player' ? 'player-fly' : 'opponent-fly'}`;
+  fly.textContent = text;
+  fly.style.left = (rect.left + rect.width / 2 - 15) + 'px';
+  fly.style.top = (rect.top - 5) + 'px';
+  document.body.appendChild(fly);
+    safeTimeout(() => fly.remove(), 1000);
+}
+
+function sleep(ms) {
+  return new Promise(r => safeTimeout(r, ms));
+}
+
+// ═══════════════════════════════════════════════
+//  GAME OVER
+// ═══════════════════════════════════════════════
+function showGameOver() {
+  const modal = document.getElementById('gameOverModal');
+  const icon = document.getElementById('modalIcon');
+  const title = document.getElementById('modalTitle');
+  const msg = document.getElementById('modalMessage');
+
+  const p2Label = gameMode === 'two' ? 'Player 2' : 'You';
+  const p1Label = gameMode === 'two' ? 'Player 1' : 'Opponent';
+
+  if (scores.player > scores.opp) {
+    icon.textContent = '🏆';
+    title.textContent = `${p2Label} Win${gameMode === 'two' ? 's' : ''}!`;
+    msg.textContent = `${p2Label} captured ${scores.player} grains vs ${p1Label}'s ${scores.opp}. Brilliant strategy!`;
+    spawnConfetti();
+  } else if (scores.opp > scores.player) {
+    icon.textContent = gameMode === 'two' ? '🏆' : '😤';
+    title.textContent = `${p1Label} Win${gameMode === 'two' ? 's' : ''}!`;
+    msg.textContent = `${p1Label} captured ${scores.opp} grains vs ${p2Label}'s ${scores.player}.${gameMode === 'two' ? ' Great game!' : ' Try again!'}`;
+    if (gameMode === 'two') spawnConfetti();
+  } else {
+    icon.textContent = '🤝';
+    title.textContent = 'It\'s a Draw!';
+    msg.textContent = `Both captured ${scores.player} grains. An evenly matched game!`;
+  }
+
+  modal.classList.add('show');
+}
+
+// ═══════════════════════════════════════════════
+//  ROUND TRANSITION
+// ═══════════════════════════════════════════════
+function showRoundEnd(playerTotalGrains, oppTotalGrains) {
+  const modal = document.getElementById('roundEndModal');
+  const title = document.getElementById('roundEndTitle');
+  const msg = document.getElementById('roundEndMessage');
+  const details = document.getElementById('roundEndDetails');
+
+  const p2Label = gameMode === 'two' ? 'Player 2' : 'You';
+  const p1Label = gameMode === 'two' ? 'Player 1' : 'Opponent';
+
+  title.textContent = `Round ${roundNumber} Complete!`;
+  msg.textContent = `${scores.player > scores.opp ? p2Label : p1Label} led this round. Preparing for Round ${roundNumber + 1}...`;
+
+  // Calculate pit filling preview
+  const playerPits = Math.floor(playerTotalGrains / INITIAL_GRAINS);
+  const playerBank = playerTotalGrains % INITIAL_GRAINS;
+  const oppPits = Math.floor(oppTotalGrains / INITIAL_GRAINS);
+  const oppBank = oppTotalGrains % INITIAL_GRAINS;
+
+  details.innerHTML = `
+    <div style="margin-bottom:8px"><strong>${p1Label}:</strong></div>
+    <div>Earned: <strong>${scores.opp}</strong> grains + Banked: <strong>${bankedGrains.opp}</strong> = <strong>${oppTotalGrains}</strong> total</div>
+    <div>Next round: <strong>${oppPits}</strong> pits filled, <strong>${PITS_PER_SIDE - oppPits}</strong> dead, <strong>${oppBank}</strong> banked</div>
+    <hr style="border-color:rgba(255,255,255,0.1); margin:8px 0">
+    <div style="margin-bottom:8px"><strong>${p2Label}:</strong></div>
+    <div>Earned: <strong>${scores.player}</strong> grains + Banked: <strong>${bankedGrains.player}</strong> = <strong>${playerTotalGrains}</strong> total</div>
+    <div>Next round: <strong>${playerPits}</strong> pits filled, <strong>${PITS_PER_SIDE - playerPits}</strong> dead, <strong>${playerBank}</strong> banked</div>
+  `;
+
+  modal.classList.add('show');
+}
+
+function startNextRound() {
+  document.getElementById('roundEndModal').classList.remove('show');
+  setupNextRound();
+}
+
+function setupNextRound() {
+  // Calculate total grains for each side
+  const playerTotalGrains = scores.player + bankedGrains.player;
+  const oppTotalGrains = scores.opp + bankedGrains.opp;
+
+  // Fill pits: each pit gets exactly 5, fill left-to-right
+  const playerPitsToFill = Math.floor(playerTotalGrains / INITIAL_GRAINS);
+  const oppPitsToFill = Math.floor(oppTotalGrains / INITIAL_GRAINS);
+
+  // Set up board
+  for (let i = 0; i < PITS_PER_SIDE; i++) {
+    board.player[i] = i < playerPitsToFill ? INITIAL_GRAINS : 0;
+    board.opp[i] = i < oppPitsToFill ? INITIAL_GRAINS : 0;
+
+    // Mark dead pits
+    deadPits.player[i] = i >= playerPitsToFill;
+    deadPits.opp[i] = i >= oppPitsToFill;
+  }
+
+  // Leftover grains become the starting score for the new round (visible on scoreboard)
+  scores.player = playerTotalGrains % INITIAL_GRAINS;
+  scores.opp = oppTotalGrains % INITIAL_GRAINS;
+  bankedGrains.player = 0;
+  bankedGrains.opp = 0;
+
+  // Turn order: the player who DIDN'T play last goes first
+  if (lastTurnSide === 'player') {
+    isPlayerTurn = false;  // opp goes first
+  } else {
+    isPlayerTurn = true;   // player goes first
+  }
+
+  // Increment round
+  roundNumber++;
+  gameOver = false;
+  isAnimating = false;
+  lastTurnSide = null;
+
+  // Render
+  renderAll();
+  document.getElementById('roundBadge').textContent = `Round ${roundNumber}`;
+
+  if (gameMode === 'two') {
+    const who = isPlayerTurn ? 'Player 2' : 'Player 1';
+    setStatus(`Round ${roundNumber} — ${who}, tap a pit on your side`);
+  } else {
+    if (!isPlayerTurn) {
+      setStatus('Round ' + roundNumber + ' — AI is thinking...');
+      sleep(400).then(() => aiTurn());
+    } else {
+      setStatus(`Round ${roundNumber} — Tap a pit on your side`);
+    }
+  }
+}
+
+function spawnConfetti() {
+  const colors = ['#f0c040', '#ff6b6b', '#4ecdc4', '#a855f7', '#f472b6', '#34d399'];
+  for (let i = 0; i < 50; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = Math.random() * 100 + 'vw';
+    piece.style.top = -10 + 'px';
+    piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+    piece.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+    piece.style.width = (5 + Math.random() * 8) + 'px';
+    piece.style.height = (5 + Math.random() * 8) + 'px';
+    piece.style.animationDelay = (Math.random() * 1) + 's';
+    piece.style.animationDuration = (2 + Math.random() * 1.5) + 's';
+    document.body.appendChild(piece);
+    safeTimeout(() => piece.remove(), 4000);
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  MODALS & CONTROLS
+// ═══════════════════════════════════════════════
+function resetGame() {
+  document.getElementById('gameOverModal').classList.remove('show');
+  showNewGameModal();
+}
+
+function showNewGameModal() {
+  clearAllTimeouts();
+  isAnimating = false;
+  gameOver = false;
+  document.getElementById('modeSelectView').style.display = '';
+  document.getElementById('diffSelectView').style.display = 'none';
+  document.getElementById('modeSubtitle').textContent = 'Choose Game Mode';
+  document.getElementById('newGameModal').classList.add('show');
+}
+
+function closeNewGameModal() {
+  document.getElementById('newGameModal').classList.remove('show');
+}
+
+function chooseSinglePlayer() {
+  document.getElementById('modeSelectView').style.display = 'none';
+  document.getElementById('diffSelectView').style.display = '';
+  document.getElementById('modeSubtitle').textContent = 'Single Player';
+  updateDiffButtons();
+}
+
+function chooseTwoPlayer() {
+  gameMode = 'two';
+  closeNewGameModal();
+  updateLabels();
+  initBoard();
+  // In two-player, opponent (Player 1) goes first
+  isPlayerTurn = false;
+  renderAll();
+  setStatus('Player 1 — tap a pit on your side');
+}
+
+function chooseProPlayer() {
+  // Coming soon - do nothing
+}
+
+function backToModeSelect() {
+  document.getElementById('modeSelectView').style.display = '';
+  document.getElementById('diffSelectView').style.display = 'none';
+  document.getElementById('modeSubtitle').textContent = 'Choose Game Mode';
+}
+
+function selectDifficulty(level) {
+  pendingDifficulty = level;
+  updateDiffButtons();
+}
+
+function updateDiffButtons() {
+  document.querySelectorAll('.difficulty-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.level) === pendingDifficulty);
+  });
+}
+
+function startNewGame() {
+  gameMode = 'single';
+  aiDepth = pendingDifficulty;
+  closeNewGameModal();
+  updateLabels();
+  initBoard();
+  renderAll();
+  setStatus('Tap a pit on your side to begin');
+}
+
+function updateLabels() {
+  const labelOpp = document.getElementById('labelOpp');
+  const labelPlayer = document.getElementById('labelPlayer');
+
+  if (gameMode === 'two') {
+    labelOpp.textContent = 'Player 1';
+    labelPlayer.textContent = 'Player 2';
+  } else {
+    labelOpp.textContent = 'Opponent';
+    labelPlayer.textContent = 'You';
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  DEBUG / TESTING HELPERS (call from browser console)
+// ═══════════════════════════════════════════════
+// Usage: debugSkipRound(48, 22)  → Simulates round end where Player1=48, Player2=22
+function debugSkipRound(p1Grains, p2Grains) {
+  if (!p1Grains && !p2Grains) {
+    console.log('Usage: debugSkipRound(player1Grains, player2Grains)');
+    console.log('Example: debugSkipRound(48, 22)');
+    return;
+  }
+  // p1 = opp side, p2 = player side
+  scores.opp = p1Grains;
+  scores.player = p2Grains;
+  board.player.fill(0);
+  board.opp.fill(0);
+  gameOver = true;
+  isAnimating = false;
+  lastTurnSide = 'opp';
+  renderAll();
+  renderTurn();
+
+  const playerTotalGrains = scores.player + bankedGrains.player;
+  const oppTotalGrains = scores.opp + bankedGrains.opp;
+
+  if (playerTotalGrains < INITIAL_GRAINS || oppTotalGrains < INITIAL_GRAINS) {
+    console.log('MATCH OVER — a player cannot fill even 1 pit');
+    showGameOver();
+  } else {
+    console.log(`Round ${roundNumber} ended. P1: ${oppTotalGrains} grains, P2: ${playerTotalGrains} grains`);
+    showRoundEnd(playerTotalGrains, oppTotalGrains);
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════
+initBoard();
+buildDOM();
+renderAll();
+// Modal shows on load - game starts when user picks a mode
+</script>
+
+</body>
+</html>

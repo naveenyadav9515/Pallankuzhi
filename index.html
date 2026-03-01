@@ -2150,104 +2150,88 @@ function getValidMoves(boardState, side) {
 }
 
 function minimax(boardState, scoresState, depth, alpha, beta, isMaximizing) {
-  // Maximizing = opponent (AI), Minimizing = player
-  const currentSide = isMaximizing ? 'opp' : 'player';
-  const moves = getValidMoves(boardState, currentSide);
+  // Legacy minimax removed - replaced by new difficulty-based simulation logic
+  return 0;
+}
 
-  if (depth === 0 || moves.length === 0) {
-    // Primary score: difference in captured grains (heavy weight)
-    let evalVal = (scoresState.opp - scoresState.player) * 15;
-
-    // Board Control: total grains remaining on each side
-    const oppBoard = boardState.opp.reduce((a, b) => a + b, 0);
-    const playerBoard = boardState.player.reduce((a, b) => a + b, 0);
-    
-    // Starvation Tactics: Force opponent to skip a turn
-    if (playerBoard === 0 && oppBoard > 0) evalVal += 50;
-
-    // INVERTED LOGIC FIX: In Pallankuzhi, pits with 4 grains are captured by the PIT OWNER.
-    // Therefore, an AI pit with 3 grains is Great (AI is close to scoring 4).
-    // A Player pit with 3 grains is Terrible for the AI (Player is close to scoring 4).
-
-    let aiNearScore = 0;
-    for (let i = 0; i < PITS_PER_SIDE; i++) {
-      if (boardState.opp[i] === 3) aiNearScore++;
-    }
-    evalVal += (aiNearScore * 25); // Massive bonus for setting up AI scoring (1 grain away)
-
-    let playerNearScore = 0;
-    for (let i = 0; i < PITS_PER_SIDE; i++) {
-      if (boardState.player[i] === 3) playerNearScore++;
-    }
-    evalVal -= (playerNearScore * 30); // Massive penalty for giving Player an easy 4
-    
-    evalVal += (oppBoard * 2);
-    evalVal -= (playerBoard * 2);
-
-    return evalVal;
-  }
-
-  if (isMaximizing) {
-    let maxEval = -Infinity;
-    for (const move of moves) {
-      const result = executeTurnSim(boardState, scoresState, currentSide, move);
-      const eval_ = minimax(result.board, result.scores, depth - 1, alpha, beta, false);
-      maxEval = Math.max(maxEval, eval_);
-      alpha = Math.max(alpha, eval_);
-      if (beta <= alpha) break;
-    }
-    return maxEval;
-  } else {
-    let minEval = Infinity;
-    for (const move of moves) {
-      const result = executeTurnSim(boardState, scoresState, currentSide, move);
-      const eval_ = minimax(result.board, result.scores, depth - 1, alpha, beta, true);
-      minEval = Math.min(minEval, eval_);
-      beta = Math.min(beta, eval_);
-      if (beta <= alpha) break;
-    }
-    return minEval;
+// Helper to shuffle an array (Fisher-Yates)
+function shuffleArray(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
   }
 }
 
 function getBestAiMove() {
-  const moves = getValidMoves(board, 'opp');
-  if (moves.length === 0) return -1;
+  const validMoves = getValidMoves(board, 'opp');
+  if (validMoves.length === 0) return -1;
 
-  let moveScores = [];
-
-  for (const move of moves) {
-    const result = executeTurnSim(board, scores, 'opp', move);
-    // Depth changes based on difficulty (Easy=1, Medium=3, Hard=7)
-    const score = minimax(result.board, result.scores, aiDepth - 1, -Infinity, Infinity, false);
-    
-    // Inject Heuristic Noise (0 to 12 points) to prevent the AI from playing identical deterministic games.
-    // Since 1 captured grain = ~17 points, this noise is too small to make the AI miss an obvious capture,
-    // but large enough to make it randomly choose between structurally similar opening/setup moves.
-    const noise = Math.random() * 12;
-    moveScores.push({ move: move, score: score + noise });
+  // EASY MODE: Pick a completely random move from valid pits
+  if (aiDepth === 1) {
+    const randomIndex = Math.floor(Math.random() * validMoves.length);
+    return validMoves[randomIndex];
   }
 
-  // Sort highest score first
-  moveScores.sort((a, b) => b.score - a.score);
+  const caseA = []; // AI Gains >= Opponent Gains
+  const caseB = []; // AI Gains < Opponent Gains
 
-  // The AI's best choice is the top of the noisy list
-  let chosenMove = moveScores[0].move;
+  for (const move of validMoves) {
+    // 1. Simulate the AI's move
+    const simResult1 = executeTurnSim(board, scores, 'opp', move);
+    
+    const aiGains = simResult1.scores.opp - scores.opp;
+    let playerGains = simResult1.scores.player - scores.player;
+    let diff = aiGains - playerGains;
 
-  // Controlled Randomness (Human Error) for Easy and Medium
-  if (aiDepth < 7 && moves.length > 1) {
-    // 30% error on Easy, 10% on Medium
-    const errorChance = aiDepth === 1 ? 0.3 : 0.1; 
-    if (Math.random() < errorChance) {
-      // Pick a genuine "blunder" from the bottom half of the ranked moves
-      const mid = Math.floor(moveScores.length / 2);
-      const errRange = moveScores.length - mid;
-      const blunderIndex = mid + Math.floor(Math.random() * errRange);
-      chosenMove = moveScores[blunderIndex].move;
+    // HARD MODE: 2-Turn Lookahead
+    if (aiDepth >= 7) {
+      // From this future state, simulate all possible Player moves
+      const playerValidMoves = getValidMoves(simResult1.board, 'player');
+      let maxPlayerFutureGains = 0;
+
+      for (const playerMove of playerValidMoves) {
+        const simResult2 = executeTurnSim(simResult1.board, simResult1.scores, 'player', playerMove);
+        const playerFutureGains = simResult2.scores.player - simResult1.scores.player;
+        if (playerFutureGains > maxPlayerFutureGains) {
+          maxPlayerFutureGains = playerFutureGains;
+        }
+      }
+      
+      // Update diff to account for the worst-case future damage the player can do
+      diff = aiGains - Math.max(playerGains, maxPlayerFutureGains);
+    }
+
+    const moveData = { move: move, diff: diff };
+
+    // Categorize into Case A or Case B
+    if (diff >= 0) {
+      caseA.push(moveData);
+    } else {
+      caseB.push(moveData);
     }
   }
 
-  return chosenMove;
+  // Determine which pool of moves to draw from
+  let targetPool = caseA.length > 0 ? caseA : caseB;
+
+  // Shuffle first to handle ties fairly (so items with exact same diff have random order)
+  shuffleArray(targetPool);
+
+  // Sort by highest diff first
+  targetPool.sort((a, b) => b.diff - a.diff);
+
+  if (aiDepth >= 7) {
+    // HARD MODE: Take the Top 2 best options (or Top 1 if only 1 exists)
+    const topN = Math.min(2, targetPool.length);
+    const topOptions = targetPool.slice(0, topN);
+    // Randomly pick one from the top options
+    const randomIndex = Math.floor(Math.random() * topOptions.length);
+    return topOptions[randomIndex].move;
+  } else {
+    // MEDIUM MODE: Picks the absolute best option
+    // (Notice targetPool[0] works safely because we already shuffled tied values!)
+    return targetPool[0].move;
+  }
 }
 
 // ═══════════════════════════════════════════════

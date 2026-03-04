@@ -88,6 +88,32 @@
   }
   .new-game-btn:active { transform: translateY(0) scale(0.95); }
 
+  /* ── GAME LEVEL BADGE ───────────────────────── */
+  .game-level-badge {
+    position: absolute;
+    top: 20px; left: 62px;
+    height: 40px;
+    padding: 0 14px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(12px);
+    display: none; /* Hidden by default */
+    align-items: center; justify-content: center;
+    z-index: 100;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.65rem; font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--accent);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+  }
+  .game-level-badge.level-veryeasy { color: #4ade80; border-color: rgba(74, 222, 128, 0.3); }
+  .game-level-badge.level-easy { color: #38bdf8; border-color: rgba(56, 189, 248, 0.3); }
+  .game-level-badge.level-medium { color: var(--accent); border-color: rgba(251, 191, 36, 0.3); }
+  .game-level-badge.level-hard { color: #f43f5e; border-color: rgba(244, 63, 94, 0.3); }
+
   /* Premium Background Particles (Ambient Dust/Embers) */
   .bg-particles {
     position: fixed; inset: 0; pointer-events: none; z-index: 0;
@@ -1169,6 +1195,9 @@
   <!-- Status -->
   <div class="status-bar" id="statusBar">Tap a pit on your side to begin</div>
 
+  <!-- Game Level Badge (top-left, aligned with refresh icon row) -->
+  <div class="game-level-badge" id="gameLevelBadge">Medium</div>
+
   <button class="new-game-btn" onclick="showNewGameModal()" title="Start New Game">
     <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
       <path d="M23 4v6h-6"></path>
@@ -1216,10 +1245,11 @@
     <!-- Difficulty Selection (shown after choosing Single Player) -->
     <div id="diffSelectView" style="display:none">
       <p style="font-size:0.85rem; font-weight:600; color:var(--text-dim); margin-bottom:12px; text-transform:uppercase; letter-spacing:1px;">Select Difficulty</p>
-      <div class="difficulty-select">
+      <div class="difficulty-select" style="flex-wrap:wrap;">
+        <button class="difficulty-btn" data-level="0" onclick="selectDifficulty(0)">Very Easy</button>
         <button class="difficulty-btn" data-level="1" onclick="selectDifficulty(1)">Easy</button>
-        <button class="difficulty-btn active" data-level="3" onclick="selectDifficulty(3)">Medium</button>
-        <button class="difficulty-btn" data-level="7" onclick="selectDifficulty(7)">Hard</button>
+        <button class="difficulty-btn active" data-level="2" onclick="selectDifficulty(2)">Medium</button>
+        <button class="difficulty-btn" data-level="3" onclick="selectDifficulty(3)">Hard</button>
       </div>
       <button class="btn btn-primary" onclick="startNewGame()" style="margin-top:12px; width:100%">Start Game</button>
       <button class="btn btn-secondary" onclick="backToModeSelect()" style="margin-top:8px; width:100%">← Back</button>
@@ -1367,8 +1397,8 @@ let board = { opp: [], player: [] }; // opp[0..6] = pits 1-7, player[0..6] = pit
 let scores = { player: 0, opp: 0 };
 let isPlayerTurn = true;
 let isAnimating = false;
-let aiDepth = 3;
-let pendingDifficulty = 3;
+let aiDepth = 2;
+let pendingDifficulty = 2;
 let gameOver = false;
 let gameMode = 'single'; // 'single', 'two', 'pro'
 
@@ -1378,6 +1408,9 @@ let bankedGrains = { player: 0, opp: 0 };
 let deadPits = { opp: Array(PITS_PER_SIDE).fill(false), player: Array(PITS_PER_SIDE).fill(false) };
 let lastTurnSide = null; // Tracks who played last in the round
 let pendingTimeouts = []; // Track all setTimeouts for reliable reset
+let preComputedAiMove = null; // AI pre-computation during player animation
+let aiMoveStartTime = 0; // Time tracking for AI computation
+let boardStateHistory = []; // Track board states for cycle detection
 
 // ─── Helper to track timeouts for cleanup ───
 function safeTimeout(fn, ms) {
@@ -1409,6 +1442,7 @@ function initBoard() {
   bankedGrains = { player: 0, opp: 0 };
   deadPits = { opp: Array(PITS_PER_SIDE).fill(false), player: Array(PITS_PER_SIDE).fill(false) };
   lastTurnSide = null;
+  boardStateHistory = []; // Reset cycle detection
   
   // Clear any lingering UI highlights from previous games
   document.querySelectorAll('.pit').forEach(p => p.classList.remove('last-picked', 'dead'));
@@ -2100,8 +2134,11 @@ function executeTurnSim(boardState, scoresState, side, pitIdx) {
   let hand = b[side][pitIdx];
   b[side][pitIdx] = 0;
   let currentLinear = startLinear;
+  let simLoopCount = 0;
 
   while (true) {
+    // Safety: prevent infinite loop in simulation (e.g. with dead pits)
+    if (++simLoopCount > 1000) break;
     while (hand > 0) {
       currentLinear = nextLive(currentLinear);
       const p = fromLinear(currentLinear);
@@ -2139,7 +2176,7 @@ function executeTurnSim(boardState, scoresState, side, pitIdx) {
 }
 
 // ═══════════════════════════════════════════════
-//  AI (Minimax with Alpha-Beta)
+//  AI ENGINE (4-Level Difficulty System)
 // ═══════════════════════════════════════════════
 function getValidMoves(boardState, side) {
   const moves = [];
@@ -2147,11 +2184,6 @@ function getValidMoves(boardState, side) {
     if (boardState[side][i] > 0) moves.push(i);
   }
   return moves;
-}
-
-function minimax(boardState, scoresState, depth, alpha, beta, isMaximizing) {
-  // Legacy minimax removed - replaced by new difficulty-based simulation logic
-  return 0;
 }
 
 // Helper to shuffle an array (Fisher-Yates)
@@ -2162,75 +2194,327 @@ function shuffleArray(array) {
   }
 }
 
-function getBestAiMove() {
-  const validMoves = getValidMoves(board, 'opp');
+// ─── Heuristic evaluation for Hard mode minimax ───
+// Evaluates how favorable a board state is for the AI (opp)
+function evaluateBoard(boardState, scoresState) {
+  // Calculate total seeds on each side
+  let aiSeeds = 0, playerSeeds = 0;
+  for (let i = 0; i < PITS_PER_SIDE; i++) {
+    aiSeeds += boardState.opp[i];
+    playerSeeds += boardState.player[i];
+  }
+
+  // ★ ROUND-WINNING DETECTION: highest priority!
+  // If opponent's board is empty, AI wins the round (gets all its remaining seeds as score)
+  if (playerSeeds === 0) {
+    const finalScore = (scoresState.opp + aiSeeds) - scoresState.player;
+    return 10000 + finalScore; // Massive bonus for winning the round
+  }
+  // If AI's board is empty, opponent wins the round (disaster)
+  if (aiSeeds === 0) {
+    const finalScore = scoresState.opp - (scoresState.player + playerSeeds);
+    return -10000 + finalScore; // Massive penalty for losing
+  }
+
+  // 1. Score difference (most important factor)
+  const scoreDiff = scoresState.opp - scoresState.player;
+
+  // 2. Board control / seed drain: heavily reward draining opponent's seeds
+  const seedControl = aiSeeds - playerSeeds;
+
+  // 3. Opponent drain bonus: the fewer seeds opponent has, the closer we are to winning
+  // Exponentially reward draining opponent (especially when they're nearly empty)
+  let drainBonus = 0;
+  if (playerSeeds <= 3) drainBonus = 15;      // Very close to wiping out
+  else if (playerSeeds <= 7) drainBonus = 8;   // Getting close
+  else if (playerSeeds <= 14) drainBonus = 3;  // Making progress
+
+  // 4. Capture potential: pits with 3 seeds (one drop away from instant-4 capture)
+  let aiCapturePotential = 0, playerCapturePotential = 0;
+  for (let i = 0; i < PITS_PER_SIDE; i++) {
+    if (boardState.opp[i] === 3) aiCapturePotential++;
+    if (boardState.player[i] === 3) playerCapturePotential++;
+  }
+
+  // 5. Empty pit advantage: empty pits can lead to captures (self-contained, no global refs)
+  let aiEmptyPits = 0, playerEmptyPits = 0;
+  for (let i = 0; i < PITS_PER_SIDE; i++) {
+    if (boardState.opp[i] === 0) aiEmptyPits++;
+    if (boardState.player[i] === 0) playerEmptyPits++;
+  }
+
+  // 6. Active pits count: more active pits = more options
+  let aiActivePits = 0, playerActivePits = 0;
+  for (let i = 0; i < PITS_PER_SIDE; i++) {
+    if (boardState.opp[i] > 0) aiActivePits++;
+    if (boardState.player[i] > 0) playerActivePits++;
+  }
+
+  // Weighted evaluation
+  return (scoreDiff * 10) +         // Score is king
+         (seedControl * 3) +         // Board control matters
+         (drainBonus) +              // Reward draining opponent toward 0
+         (aiCapturePotential * 3) -   // Our capture setups
+         (playerCapturePotential * 3) + // Penalize opponent setups
+         ((playerEmptyPits - aiEmptyPits) * 1.5) + // More empty pits on opponent = closer to wipe-out
+         ((aiActivePits - playerActivePits) * 2); // Mobility advantage: more options = much better
+}
+
+// ─── Pre-evaluate moves with 1-ply for move ordering (Hard mode) ───
+function preEvaluateMoves(boardState, scoresState, side) {
+  const validMoves = getValidMoves(boardState, side);
+  const evaluated = [];
+  for (const move of validMoves) {
+    const sim = executeTurnSim(boardState, scoresState, side, move);
+    const score = evaluateBoard(sim.board, sim.scores);
+    evaluated.push({ move, score, sim });
+  }
+  // Sort: AI (opp) wants highest score, player wants lowest
+  if (side === 'opp') {
+    evaluated.sort((a, b) => b.score - a.score);
+  } else {
+    evaluated.sort((a, b) => a.score - b.score);
+  }
+  return evaluated;
+}
+
+// ─── Time-bounded Minimax with Alpha-Beta Pruning + Transposition Table ───
+let _aiNodeCount = 0;
+let _aiTimedOut = false;
+const AI_TIME_BUDGET = 4500; // 4.5 seconds max (aggressive)
+const AI_MAX_NODES = 1000000; // 1M node safety cap
+let _transpositionTable = new Map(); // Cache evaluated positions
+
+// Fast board hash for transposition table
+function boardHash(boardState, scoresState, depth, isMax) {
+  // Use a string key (fast enough for JS)
+  let key = '';
+  for (let i = 0; i < PITS_PER_SIDE; i++) key += boardState.opp[i] + ',';
+  key += '|';
+  for (let i = 0; i < PITS_PER_SIDE; i++) key += boardState.player[i] + ',';
+  key += '|' + scoresState.opp + '|' + scoresState.player + '|' + depth + '|' + (isMax ? 1 : 0);
+  return key;
+}
+
+function minimaxAB(boardState, scoresState, depth, alpha, beta, isMaximizing) {
+  _aiNodeCount++;
+
+  // Time/node check every 500 nodes
+  if (_aiNodeCount % 500 === 0) {
+    if (Date.now() - aiMoveStartTime > AI_TIME_BUDGET || _aiNodeCount > AI_MAX_NODES) {
+      _aiTimedOut = true;
+      return evaluateBoard(boardState, scoresState);
+    }
+  }
+
+  if (_aiTimedOut) {
+    return evaluateBoard(boardState, scoresState);
+  }
+
+  // Terminal: depth 0 or no moves
+  const side = isMaximizing ? 'opp' : 'player';
+  const validMoves = getValidMoves(boardState, side);
+
+  if (depth === 0 || validMoves.length === 0) {
+    return evaluateBoard(boardState, scoresState);
+  }
+
+  // Check if game would end
+  const oppTotal = boardState.opp.reduce((a, b) => a + b, 0);
+  const playerTotal = boardState.player.reduce((a, b) => a + b, 0);
+  if (oppTotal === 0 || playerTotal === 0) {
+    return evaluateBoard(boardState, scoresState);
+  }
+
+  // Transposition table lookup
+  const hashKey = boardHash(boardState, scoresState, depth, isMaximizing);
+  if (_transpositionTable.has(hashKey)) {
+    return _transpositionTable.get(hashKey);
+  }
+
+  if (isMaximizing) {
+    let maxEval = -Infinity;
+    // Move ordering at depth >= 2 for better pruning
+    const orderedMoves = (depth >= 2) ? preEvaluateMoves(boardState, scoresState, 'opp').map(m => m.move) : validMoves;
+    for (const move of orderedMoves) {
+      if (_aiTimedOut) break;
+      const sim = executeTurnSim(boardState, scoresState, 'opp', move);
+      const evalScore = minimaxAB(sim.board, sim.scores, depth - 1, alpha, beta, false);
+      maxEval = Math.max(maxEval, evalScore);
+      alpha = Math.max(alpha, evalScore);
+      if (beta <= alpha) break; // Alpha-beta prune
+    }
+    // Store in transposition table
+    if (!_aiTimedOut) _transpositionTable.set(hashKey, maxEval);
+    return maxEval;
+  } else {
+    let minEval = Infinity;
+    const orderedMoves = (depth >= 2) ? preEvaluateMoves(boardState, scoresState, 'player').map(m => m.move) : validMoves;
+    for (const move of orderedMoves) {
+      if (_aiTimedOut) break;
+      const sim = executeTurnSim(boardState, scoresState, 'player', move);
+      const evalScore = minimaxAB(sim.board, sim.scores, depth - 1, alpha, beta, true);
+      minEval = Math.min(minEval, evalScore);
+      beta = Math.min(beta, evalScore);
+      if (beta <= alpha) break; // Alpha-beta prune
+    }
+    if (!_aiTimedOut) _transpositionTable.set(hashKey, minEval);
+    return minEval;
+  }
+}
+
+// ─── Iterative Deepening wrapper for Hard mode ───
+function getBestMoveHard(boardState, scoresState) {
+  aiMoveStartTime = Date.now();
+  const validMoves = getValidMoves(boardState, 'opp');
+  if (validMoves.length === 0) return -1;
+  if (validMoves.length === 1) return validMoves[0]; // Only one choice
+
+  let bestMove = validMoves[0];
+  let bestScore = -Infinity;
+
+  // Clear transposition table for each new move decision
+  _transpositionTable = new Map();
+
+  // Iterative deepening: start shallow, go deeper if time allows
+  for (let depth = 1; depth <= 15; depth++) {
+    _aiNodeCount = 0;
+    _aiTimedOut = false;
+    let currentBestMove = validMoves[0];
+    let currentBestScore = -Infinity;
+
+    // Pre-sort moves at top level for better pruning
+    const orderedMoves = preEvaluateMoves(boardState, scoresState, 'opp');
+
+    for (const { move } of orderedMoves) {
+      if (_aiTimedOut) break;
+      const sim = executeTurnSim(boardState, scoresState, 'opp', move);
+      const evalScore = minimaxAB(sim.board, sim.scores, depth - 1, -Infinity, Infinity, false);
+      if (evalScore > currentBestScore) {
+        currentBestScore = evalScore;
+        currentBestMove = move;
+      }
+    }
+
+    // Only use results from fully completed depths
+    if (!_aiTimedOut) {
+      bestMove = currentBestMove;
+      bestScore = currentBestScore;
+      console.log(`AI depth ${depth}: best move ${bestMove}, score ${bestScore}, nodes ${_aiNodeCount}`);
+    } else {
+      break; // Ran out of time, use last completed depth
+    }
+
+    // Check if we've used too much time to start next depth
+    if (Date.now() - aiMoveStartTime > AI_TIME_BUDGET * 0.6) break;
+  }
+
+  console.log(`AI final: move ${bestMove}, score ${bestScore}, time ${Date.now() - aiMoveStartTime}ms`);
+  return bestMove;
+}
+
+// ─── Main AI move selector (dispatches by difficulty) ───
+function getBestAiMove(bState, sState) {
+  // Use passed state (for pre-computation) or fallback to global
+  const b = bState || board;
+  const s = sState || scores;
+  const validMoves = getValidMoves(b, 'opp');
   if (validMoves.length === 0) return -1;
 
-  // EASY MODE: Pick a completely random move from valid pits
-  if (aiDepth === 1) {
-    const randomIndex = Math.floor(Math.random() * validMoves.length);
-    return validMoves[randomIndex];
-  }
-
-  const caseA = []; // AI Gains >= Opponent Gains
-  const caseB = []; // AI Gains < Opponent Gains
-
-  for (const move of validMoves) {
-    // 1. Simulate the AI's move
-    const simResult1 = executeTurnSim(board, scores, 'opp', move);
-    
-    const aiGains = simResult1.scores.opp - scores.opp;
-    let playerGains = simResult1.scores.player - scores.player;
-    let diff = aiGains - playerGains;
-
-    // HARD MODE: 2-Turn Lookahead
-    if (aiDepth >= 7) {
-      // From this future state, simulate all possible Player moves
-      const playerValidMoves = getValidMoves(simResult1.board, 'player');
-      let maxPlayerFutureGains = 0;
-
-      for (const playerMove of playerValidMoves) {
-        const simResult2 = executeTurnSim(simResult1.board, simResult1.scores, 'player', playerMove);
-        const playerFutureGains = simResult2.scores.player - simResult1.scores.player;
-        if (playerFutureGains > maxPlayerFutureGains) {
-          maxPlayerFutureGains = playerFutureGains;
-        }
-      }
-      
-      // Update diff to account for the worst-case future damage the player can do
-      diff = aiGains - Math.max(playerGains, maxPlayerFutureGains);
+  // ── LEVEL 0: VERY EASY — deliberately picks bad moves ──
+  if (aiDepth === 0) {
+    // Evaluate all moves, pick the WORST for AI (best for opponent)
+    const scored = [];
+    for (const move of validMoves) {
+      const sim = executeTurnSim(b, s, 'opp', move);
+      const diff = (sim.scores.opp - s.opp) - (sim.scores.player - s.player);
+      scored.push({ move, diff });
     }
+    scored.sort((a, b) => a.diff - b.diff); // Worst first
 
-    const moveData = { move: move, diff: diff };
-
-    // Categorize into Case A or Case B
-    if (diff >= 0) {
-      caseA.push(moveData);
+    // 70% pick worst move, 30% pure random
+    if (Math.random() < 0.7) {
+      return scored[0].move;
     } else {
-      caseB.push(moveData);
+      return validMoves[Math.floor(Math.random() * validMoves.length)];
     }
   }
 
-  // Determine which pool of moves to draw from
-  let targetPool = caseA.length > 0 ? caseA : caseB;
+  // ── LEVEL 1: EASY — mostly random, sometimes greedy ──
+  if (aiDepth === 1) {
+    // 60% random, 40% greedy (pick best immediate gain)
+    if (Math.random() < 0.6) {
+      return validMoves[Math.floor(Math.random() * validMoves.length)];
+    }
+    // Greedy: pick move with best immediate AI gain (no defense)
+    let bestMove = validMoves[0], bestGain = -Infinity;
+    for (const move of validMoves) {
+      const sim = executeTurnSim(b, s, 'opp', move);
+      const gain = sim.scores.opp - s.opp;
+      if (gain > bestGain) { bestGain = gain; bestMove = move; }
+    }
+    return bestMove;
+  }
 
-  // Shuffle first to handle ties fairly (so items with exact same diff have random order)
-  shuffleArray(targetPool);
+  // ── LEVEL 2: MEDIUM — greedy with opponent awareness ──
+  if (aiDepth === 2) {
+    // 80% smart play, 20% random to keep it beatable
+    if (Math.random() < 0.2) {
+      return validMoves[Math.floor(Math.random() * validMoves.length)];
+    }
 
-  // Sort by highest diff first
-  targetPool.sort((a, b) => b.diff - a.diff);
+    const scored = [];
+    for (const move of validMoves) {
+      const sim = executeTurnSim(b, s, 'opp', move);
+      const aiGains = sim.scores.opp - s.opp;
+      const playerGains = sim.scores.player - s.player;
 
-  if (aiDepth >= 7) {
-    // HARD MODE: Take the Top 2 best options (or Top 1 if only 1 exists)
-    const topN = Math.min(2, targetPool.length);
-    const topOptions = targetPool.slice(0, topN);
-    // Randomly pick one from the top options
-    const randomIndex = Math.floor(Math.random() * topOptions.length);
-    return topOptions[randomIndex].move;
-  } else {
-    // MEDIUM MODE: Picks the absolute best option
-    // (Notice targetPool[0] works safely because we already shuffled tied values!)
-    return targetPool[0].move;
+      // Look at opponent's best response
+      const playerMoves = getValidMoves(sim.board, 'player');
+      let maxPlayerResponse = 0;
+      for (const pm of playerMoves) {
+        const sim2 = executeTurnSim(sim.board, sim.scores, 'player', pm);
+        const pg = sim2.scores.player - sim.scores.player;
+        if (pg > maxPlayerResponse) maxPlayerResponse = pg;
+      }
+
+      const diff = aiGains - Math.max(playerGains, maxPlayerResponse);
+      scored.push({ move, diff });
+    }
+
+    shuffleArray(scored); // Break ties randomly
+    scored.sort((a, b) => b.diff - a.diff);
+    return scored[0].move;
+  }
+
+  // ── LEVEL 3: HARD — Time-bounded Iterative Deepening Minimax ──
+  return getBestMoveHard(b, s);
+}
+
+// ─── Pre-computation: start AI analysis during opponent's animation ───
+function startAiPreComputation(playerPitIdx) {
+  preComputedAiMove = null;
+  if (gameMode !== 'single' || aiDepth < 2) return; // Only pre-compute for Medium+ in single player
+
+  // Simulate the player's move to get the resulting board state
+  const futureState = executeTurnSim(board, scores, 'player', playerPitIdx);
+
+  // Check if AI has valid moves in the future state
+  const futureAiMoves = getValidMoves(futureState.board, 'opp');
+  if (futureAiMoves.length === 0) return;
+
+  // Check if the game would end after player's move
+  const playerTotal = futureState.board.player.reduce((a, b) => a + b, 0);
+  const oppTotal = futureState.board.opp.reduce((a, b) => a + b, 0);
+  if (playerTotal === 0 || oppTotal === 0) return;
+
+  // Start computing AI's best move against the future board state
+  // This runs immediately (synchronously) but the result is stored for later use
+  aiMoveStartTime = Date.now();
+  try {
+    preComputedAiMove = getBestAiMove(futureState.board, futureState.scores);
+  } catch(e) {
+    preComputedAiMove = null; // Fallback: recompute later
   }
 }
 
@@ -2238,6 +2522,38 @@ function getBestAiMove() {
 //  TURN FLOW
 // ═══════════════════════════════════════════════
 async function endTurn() {
+  // ─── CYCLE DETECTION: track board states to prevent infinite loops ───
+  const stateKey = board.opp.join(',') + '|' + board.player.join(',') + '|' + (isPlayerTurn ? 'p' : 'o');
+  boardStateHistory.push(stateKey);
+  
+  // Count how many times this exact state has occurred
+  const stateCount = boardStateHistory.filter(s => s === stateKey).length;
+  if (stateCount >= 3) {
+    // Cycle detected! End the round — each side keeps their remaining board grains
+    const playerBoardTotal = board.player.reduce((a, b) => a + b, 0);
+    const oppBoardTotal = board.opp.reduce((a, b) => a + b, 0);
+    scores.player += playerBoardTotal;
+    scores.opp += oppBoardTotal;
+    board.player.fill(0);
+    board.opp.fill(0);
+    renderAll();
+    gameOver = true;
+    isAnimating = false;
+    renderTurn();
+    setStatus('Round ended — cycle detected');
+    boardStateHistory = []; // Reset history
+    await sleep(500);
+
+    const playerTotalGrains = scores.player + bankedGrains.player;
+    const oppTotalGrains = scores.opp + bankedGrains.opp;
+    if (playerTotalGrains < INITIAL_GRAINS || oppTotalGrains < INITIAL_GRAINS) {
+      showGameOver();
+    } else {
+      showRoundEnd(playerTotalGrains, oppTotalGrains);
+    }
+    return;
+  }
+
   // Check if a side has no more grains on board (round end condition)
   const playerBoardTotal = board.player.reduce((a, b) => a + b, 0);
   const oppBoardTotal = board.opp.reduce((a, b) => a + b, 0);
@@ -2252,6 +2568,7 @@ async function endTurn() {
     gameOver = true;
     isAnimating = false;
     renderTurn();
+    boardStateHistory = []; // Reset history
     await sleep(500);
 
     // Calculate each player's total grains (scored + banked from previous rounds)
@@ -2284,12 +2601,18 @@ async function endTurn() {
     // Single player: AI takes over
     if (!isPlayerTurn) {
       document.body.classList.add('ai-thinking');
-      // Hide the turn text entirely to avoid overlapping/redundancy with the premium loader
       setStatus('');
       document.getElementById('turnDot').style.display = 'none';
       
-      // Wait for 4 seconds as requested to simulate deep thought (Easy/Medium/Hard)
-      await sleep(4000);
+      // Difficulty-based thinking delay
+      // For Very Easy/Easy/Medium: cosmetic delay only (computation is instant)
+      // For Hard: show indicator, yield to browser, then compute
+      let thinkDelay = 500;  // Very Easy
+      if (aiDepth === 1) thinkDelay = 1000;  // Easy
+      if (aiDepth === 2) thinkDelay = 1500;  // Medium
+      if (aiDepth === 3) thinkDelay = 800;   // Hard: short display then compute
+      
+      await sleep(thinkDelay);
       
       document.body.classList.remove('ai-thinking');
       document.getElementById('turnDot').style.display = 'block';
@@ -2303,7 +2626,21 @@ async function endTurn() {
 }
 
 async function aiTurn() {
-  const move = getBestAiMove();
+  let move;
+  
+  // Use pre-computed move if available (was computed during player's animation)
+  if (preComputedAiMove !== null && preComputedAiMove !== -1) {
+    // Verify the pre-computed move is still valid (board state matches)
+    if (board.opp[preComputedAiMove] > 0) {
+      move = preComputedAiMove;
+    } else {
+      move = getBestAiMove(); // Fallback: recompute
+    }
+    preComputedAiMove = null;
+  } else {
+    move = getBestAiMove();
+  }
+  
   if (move === -1) {
     // No moves, end
     isPlayerTurn = true;
@@ -2326,6 +2663,12 @@ async function playerTurnFlow(idx) {
   AudioManager.pitSelect();
   isAnimating = true;
   updateClickable();
+
+  // Pre-compute AI's response while player's animation plays
+  // Only for Easy/Medium (instant computation). Hard mode computes after animation.
+  if (gameMode === 'single' && aiDepth <= 2) {
+    startAiPreComputation(idx);
+  }
 
   await executeTurn('player', idx, true);
   await endTurn();
@@ -2568,6 +2911,7 @@ function setupNextRound() {
   gameOver = false;
   isAnimating = false;
   lastTurnSide = null;
+  boardStateHistory = []; // Reset cycle detection for new round
 
   // Render
   renderAll();
@@ -2616,6 +2960,7 @@ function showNewGameModal() {
   clearAllTimeouts();
   isAnimating = false;
   gameOver = false;
+  preComputedAiMove = null;
   document.getElementById('modeSelectView').style.display = '';
   document.getElementById('diffSelectView').style.display = 'none';
   document.getElementById('modeSubtitle').textContent = 'Choose Game Mode';
@@ -2641,6 +2986,8 @@ function chooseTwoPlayer() {
   gameMode = 'two';
   closeNewGameModal();
   updateLabels();
+  // Hide game level badge for two-player mode
+  document.getElementById('gameLevelBadge').style.display = 'none';
   initBoard();
   // In two-player, opponent (Player 1) goes first
   isPlayerTurn = false;
@@ -2676,19 +3023,30 @@ function startNewGame() {
   AudioManager.click();
   gameMode = 'single';
   aiDepth = pendingDifficulty;
+  preComputedAiMove = null;
   closeNewGameModal();
   updateLabels();
   
-  // Display difficulty setting in UI
+  // Display difficulty setting in old badge (top scoreboard)
   const diffBadge = document.getElementById('difficultyBadge');
   if (gameMode === 'single') {
     diffBadge.style.display = 'inline-block';
-    let diffText = 'EASY';
-    if (aiDepth === 4) diffText = 'MEDIUM';
-    if (aiDepth >= 7) diffText = 'HARD';
-    diffBadge.textContent = diffText;
+    const diffNames = { 0: 'VERY EASY', 1: 'EASY', 2: 'MEDIUM', 3: 'HARD' };
+    diffBadge.textContent = diffNames[aiDepth] || 'MEDIUM';
   } else {
     diffBadge.style.display = 'none';
+  }
+
+  // Update game level badge (top-left corner)
+  const levelBadge = document.getElementById('gameLevelBadge');
+  if (gameMode === 'single') {
+    const levelNames = { 0: 'Very Easy', 1: 'Easy', 2: 'Medium', 3: 'Hard' };
+    const levelClasses = { 0: 'level-veryeasy', 1: 'level-easy', 2: 'level-medium', 3: 'level-hard' };
+    levelBadge.textContent = levelNames[aiDepth] || 'Medium';
+    levelBadge.className = 'game-level-badge ' + (levelClasses[aiDepth] || 'level-medium');
+    levelBadge.style.display = 'flex';
+  } else {
+    levelBadge.style.display = 'none';
   }
 
   initBoard();
@@ -2741,6 +3099,70 @@ function debugSkipRound(p1Grains, p2Grains) {
     console.log(`Round ${roundNumber} ended. P1: ${oppTotalGrains} grains, P2: ${playerTotalGrains} grains`);
     showRoundEnd(playerTotalGrains, oppTotalGrains);
   }
+}
+
+/**
+ * debugSetBoard([5,5,5,5,5,5,5], [0,0,0,5,0,0,0], 20, 10)
+ * Sets the exact board state. 
+ * First arg: Opponent (AI) pits (array of 7 or single number)
+ * Second arg: Player pits (array of 7 or single number)
+ * Third/Fourth: Scores (optional)
+ */
+function debugSetBoard(oppPits, playerPits, oppScore, playerScore) {
+  if (typeof oppPits === 'number') board.opp.fill(oppPits);
+  else if (Array.isArray(oppPits)) board.opp = [...oppPits];
+  
+  if (typeof playerPits === 'number') board.player.fill(playerPits);
+  else if (Array.isArray(playerPits)) board.player = [...playerPits];
+  
+  if (oppScore !== undefined) scores.opp = oppScore;
+  if (playerScore !== undefined) scores.player = playerScore;
+  
+  // Calculate dead pits based on initial board state (pits starting at 0 are dead)
+  for (let i = 0; i < PITS_PER_SIDE; i++) {
+    deadPits.opp[i] = (board.opp[i] === 0);
+    deadPits.player[i] = (board.player[i] === 0);
+  }
+  
+  gameOver = false;
+  isAnimating = false;
+  boardStateHistory = []; // Reset cycle detection for the new state
+  renderAll();
+  renderTurn();
+  console.log('Board updated manually. Current state:', {board, scores, deadPits});
+}
+
+/**
+ * debugPlayMove('opp', 2)
+ * Manually forces a move for the specified side.
+ * side: 'player' (bottom) or 'opp' (top)
+ * idx: 0-6
+ */
+async function debugPlayMove(side, idx) {
+  if (isAnimating) {
+    console.error('Cannot play move while animating');
+    return;
+  }
+  if (board[side][idx] === 0) {
+    console.error('Pit is empty');
+    return;
+  }
+  
+  isAnimating = true;
+  await executeTurn(side, idx, true);
+  await endTurn();
+}
+
+/**
+ * debugSetTurn('opp')
+ * Switches the turn to the specified side.
+ * side: 'player' or 'opp'
+ */
+function debugSetTurn(side) {
+  isPlayerTurn = (side === 'player');
+  renderTurn();
+  updateClickable();
+  console.log('Turn set to:', side);
 }
 
 // ═══════════════════════════════════════════════

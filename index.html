@@ -233,7 +233,12 @@
     transform: scale(1.08);
   }
   @media (max-width: 600px) {
-    .scoreboard { display: none; } /* Hide redundant top scoreboard on mobile */
+    .scoreboard {
+      display: flex; /* Show on mobile */
+      padding: 4px 8px;
+    }
+    .scoreboard .score-card { display: none; } /* Hide score cards on mobile (shown on board) */
+    .difficulty-badge { display: none !important; } /* Hide difficulty badge on mobile */
   }
   .score-label {
     font-size: 0.65rem; text-transform: uppercase;
@@ -1120,6 +1125,216 @@
     .pit-count { font-size: 1.3rem; }
     .grain-dot { width: 8px; height: 8px; }
   }
+
+  /* ── AI PIT INDICATOR ─────────────────────── */
+  .pit.ai-pit-indicator {
+    border-color: var(--opponent-accent) !important;
+    box-shadow: 
+      0 0 20px rgba(244, 63, 94, 0.5),
+      0 0 40px rgba(244, 63, 94, 0.3),
+      inset 0 0 10px rgba(244, 63, 94, 0.2) !important;
+    animation: aiPitPulse 0.6s ease-in-out infinite alternate !important;
+    transform: scale(1.08) !important;
+    z-index: 10;
+  }
+  @keyframes aiPitPulse {
+    0% { box-shadow: 0 0 15px rgba(244, 63, 94, 0.4), inset 0 0 8px rgba(244, 63, 94, 0.15); transform: scale(1.05); }
+    100% { box-shadow: 0 0 30px rgba(244, 63, 94, 0.7), 0 0 50px rgba(244, 63, 94, 0.3), inset 0 0 15px rgba(244, 63, 94, 0.25); transform: scale(1.1); }
+  }
+
+  /* ── UNDO BUTTON ──────────────────────────── */
+  .undo-btn {
+    position: absolute;
+    bottom: 20px; left: 20px;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    backdrop-filter: blur(12px);
+    display: none; /* Shown via JS */
+    align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    color: var(--player-accent);
+    z-index: 100;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    font-size: 1.2rem;
+  }
+  .undo-btn:hover {
+    background: rgba(56, 189, 248, 0.2);
+    border-color: var(--player-accent);
+    transform: scale(1.1);
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+  }
+  .undo-btn:active { transform: scale(0.95); }
+
+  /* ── PREVIOUS ROUND BUTTON ────────────────── */
+  .prev-round-btn {
+    position: absolute;
+    top: 20px; right: 120px;
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    color: var(--accent);
+    z-index: 100;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    opacity: 0.3;
+    pointer-events: none;
+  }
+  .prev-round-btn:hover {
+    background: rgba(252, 211, 77, 0.15);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 0 20px var(--accent-glow);
+  }
+  .prev-round-btn:active { transform: translateY(0) scale(0.95); }
+
+  /* ── RESET ROUND BUTTON ────────────────── */
+  .reset-round-btn {
+    position: absolute;
+    top: 20px; right: 70px;
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    color: var(--accent);
+    z-index: 100;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    opacity: 0.3;
+    pointer-events: none;
+  }
+  .reset-round-btn:hover {
+    background: rgba(252, 211, 77, 0.15);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 0 20px var(--accent-glow);
+  }
+  .reset-round-btn:active { transform: translateY(0) scale(0.95); }
+
+  /* ── COIN TOSS OVERLAY ────────────────────── */
+  .coin-toss-overlay {
+    position: fixed; inset: 0;
+    background: rgba(5, 3, 8, 0.92);
+    backdrop-filter: blur(20px);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 300;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.4s ease;
+  }
+  .coin-toss-overlay.show {
+    opacity: 1; pointer-events: auto;
+  }
+  .coin-toss-title {
+    font-size: 1.4rem; font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--accent);
+    margin-bottom: 40px;
+    text-shadow: 0 0 20px var(--accent-glow);
+  }
+  .coin-container {
+    perspective: 1000px;
+    margin-bottom: 30px;
+  }
+  .coin {
+    width: 140px; height: 140px;
+    border-radius: 50%;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 0.6s ease;
+  }
+  .coin .coin-face {
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    backface-visibility: hidden;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border: 3px solid;
+    box-shadow: 0 0 30px rgba(0,0,0,0.5), inset 0 0 20px rgba(255,255,255,0.1);
+  }
+  .coin .coin-heads {
+    background: linear-gradient(145deg, #1a3a4a, #0d2633);
+    border-color: rgba(56, 189, 248, 0.5);
+    color: var(--player-accent);
+  }
+  .coin .coin-heads .coin-icon { font-size: 2.4rem; margin-bottom: 4px; }
+  .coin .coin-heads .coin-label { font-size: 0.65rem; letter-spacing: 2px; }
+  .coin .coin-tails {
+    background: linear-gradient(145deg, #3a1a2a, #260d1a);
+    border-color: rgba(244, 63, 94, 0.5);
+    color: var(--opponent-accent);
+    transform: rotateY(180deg);
+  }
+  .coin .coin-tails .coin-icon { font-size: 2.4rem; margin-bottom: 4px; }
+  .coin .coin-tails .coin-label { font-size: 0.65rem; letter-spacing: 2px; }
+
+  /* Flip animation */
+  .coin.flipping {
+    animation: coinFlip 1.8s ease-in-out forwards;
+  }
+  @keyframes coinFlip {
+    0% { transform: rotateY(0deg); }
+    20% { transform: rotateY(540deg); }
+    40% { transform: rotateY(1080deg); }
+    60% { transform: rotateY(1620deg); }
+    80% { transform: rotateY(2160deg); }
+    100% { transform: rotateY(2520deg); } /* 7 full rotations — lands on heads by default */
+  }
+  .coin.result-heads {
+    transform: rotateY(0deg);
+    transition: transform 0.3s ease;
+  }
+  .coin.result-tails {
+    transform: rotateY(180deg);
+    transition: transform 0.3s ease;
+  }
+
+  .coin-result-text {
+    font-size: 1.5rem; font-weight: 800;
+    margin-top: 20px;
+    min-height: 2em;
+    text-shadow: 0 0 15px currentColor;
+    letter-spacing: 1px;
+  }
+  .coin-toss-btn {
+    margin-top: 20px;
+    padding: 14px 48px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, var(--accent), #f59e0b);
+    border: none;
+    color: #1a0f00;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1rem; font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 20px rgba(251, 191, 36, 0.4);
+  }
+  .coin-toss-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 30px rgba(251, 191, 36, 0.5);
+  }
+  .coin-toss-btn:active { transform: translateY(0) scale(0.97); }
+  .coin-toss-btn:disabled {
+    opacity: 0.5; cursor: not-allowed;
+    transform: none !important;
+  }
 </style>
 </head>
 <body>
@@ -1196,7 +1411,30 @@
   <div class="status-bar" id="statusBar">Tap a pit on your side to begin</div>
 
   <!-- Game Level Badge (top-left, aligned with refresh icon row) -->
-  <div class="game-level-badge" id="gameLevelBadge">Medium</div>
+  <div class="game-level-badge" id="gameLevelBadge">Easy</div>
+
+  <!-- Undo Button -->
+  <button class="undo-btn" id="undoBtn" onclick="undoLastMove()" title="Undo Last Move">
+    <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M1 4v6h6"></path>
+      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+    </svg>
+  </button>
+
+  <!-- Reset Round Button -->
+  <button class="reset-round-btn" id="resetRoundBtn" onclick="resetCurrentRound()" title="Reset Current Round">
+    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2.5 2v6h6M2.66 15.57a10 10 0 1 0 1.43-5.96L2.5 8"></path>
+    </svg>
+  </button>
+
+  <!-- Previous Round Button -->
+  <button class="prev-round-btn" id="prevRoundBtn" onclick="goToPreviousRound()" title="Go to Previous Round">
+    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="19 20 9 12 19 4 19 20"></polygon>
+      <line x1="5" y1="19" x2="5" y2="5"></line>
+    </svg>
+  </button>
 
   <button class="new-game-btn" onclick="showNewGameModal()" title="Start New Game">
     <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
@@ -1227,6 +1465,25 @@
   </div>
 </div>
 
+<!-- Coin Toss Overlay -->
+<div class="coin-toss-overlay" id="coinTossOverlay">
+  <div class="coin-toss-title">Coin Toss</div>
+  <div class="coin-container">
+    <div class="coin" id="coinElement">
+      <div class="coin-face coin-heads">
+        <span class="coin-icon">🎯</span>
+        <span class="coin-label">Heads</span>
+      </div>
+      <div class="coin-face coin-tails">
+        <span class="coin-icon">🤖</span>
+        <span class="coin-label">Tails</span>
+      </div>
+    </div>
+  </div>
+  <div class="coin-result-text" id="coinResultText"></div>
+  <button class="coin-toss-btn" id="coinTossBtn" onclick="performCoinToss()">Toss!</button>
+</div>
+
 <!-- New Game / Mode Selection Modal -->
 <div class="modal-overlay show" id="newGameModal">
   <div class="modal">
@@ -1247,8 +1504,8 @@
       <p style="font-size:0.85rem; font-weight:600; color:var(--text-dim); margin-bottom:12px; text-transform:uppercase; letter-spacing:1px;">Select Difficulty</p>
       <div class="difficulty-select" style="flex-wrap:wrap;">
         <button class="difficulty-btn" data-level="0" onclick="selectDifficulty(0)">Very Easy</button>
-        <button class="difficulty-btn" data-level="1" onclick="selectDifficulty(1)">Easy</button>
-        <button class="difficulty-btn active" data-level="2" onclick="selectDifficulty(2)">Medium</button>
+        <button class="difficulty-btn active" data-level="1" onclick="selectDifficulty(1)">Easy</button>
+        <button class="difficulty-btn" data-level="2" onclick="selectDifficulty(2)">Medium</button>
         <button class="difficulty-btn" data-level="3" onclick="selectDifficulty(3)">Hard</button>
       </div>
       <button class="btn btn-primary" onclick="startNewGame()" style="margin-top:12px; width:100%">Start Game</button>
@@ -1387,20 +1644,26 @@ function toggleSound() {
 // ═══════════════════════════════════════════════
 const PITS_PER_SIDE = 7;
 const INITIAL_GRAINS = 5;
-const GRAIN_FLY_MS = 350;     // Time for grain to fly to destination pit
-const GRAIN_STAGGER_MS = 70;  // Stagger between each grain departure
+const GRAIN_FLY_MS = 1250;    // Time for each grain distribution (both sides)
+const GRAIN_STAGGER_MS = 100; // Stagger between each grain departure
+const AI_THINK_MS = 1500;     // AI thinking phase
+const AI_INDICATE_MS = 2000;  // AI pit indication phase
+const AI_PRE_DIST_MS = 1500;  // Pause before AI distribution
 const ANIM_PICK_MS = 500;     // Picking animation duration
 const ANIM_CAPTURE_MS = 400;  // Capture animation duration
 const ANIM_SETTLE_MS = 150;   // Settle time after grains land
+const MAX_ROUND_MOVES = 200;  // Max total moves per round (infinite loop safety)
+const MAX_CHAIN_PICKS = 500;  // Max chain picks in a single turn
 
 let board = { opp: [], player: [] }; // opp[0..6] = pits 1-7, player[0..6] = pits 1-7
 let scores = { player: 0, opp: 0 };
 let isPlayerTurn = true;
 let isAnimating = false;
-let aiDepth = 2;
-let pendingDifficulty = 2;
+let aiDepth = 1;
+let pendingDifficulty = 1;
 let gameOver = false;
 let gameMode = 'single'; // 'single', 'two', 'pro'
+let isAiTurn = false; // Track if AI is currently playing
 
 // Multi-round state
 let roundNumber = 1;
@@ -1411,6 +1674,14 @@ let pendingTimeouts = []; // Track all setTimeouts for reliable reset
 let preComputedAiMove = null; // AI pre-computation during player animation
 let aiMoveStartTime = 0; // Time tracking for AI computation
 let boardStateHistory = []; // Track board states for cycle detection
+let roundMoveCount = 0; // Total moves in current round
+let firstPickSide = null; // Who picked first THIS round (for alternation)
+
+// Undo / Back state
+let moveHistory = []; // Stack of board snapshots for undo
+
+// Round history for "go to previous round"
+let roundHistory = []; // Stack of round-start snapshots
 
 // ─── Helper to track timeouts for cleanup ───
 function safeTimeout(fn, ms) {
@@ -1438,14 +1709,19 @@ function initBoard() {
   isPlayerTurn = true;
   gameOver = false;
   isAnimating = false;
+  isAiTurn = false;
   roundNumber = 1;
   bankedGrains = { player: 0, opp: 0 };
   deadPits = { opp: Array(PITS_PER_SIDE).fill(false), player: Array(PITS_PER_SIDE).fill(false) };
   lastTurnSide = null;
   boardStateHistory = []; // Reset cycle detection
+  roundMoveCount = 0;
+  firstPickSide = null;
+  moveHistory = [];
+  roundHistory = [];
   
   // Clear any lingering UI highlights from previous games
-  document.querySelectorAll('.pit').forEach(p => p.classList.remove('last-picked', 'dead'));
+  document.querySelectorAll('.pit').forEach(p => p.classList.remove('last-picked', 'dead', 'ai-pit-indicator'));
 }
 
 function buildDOM() {
@@ -1810,7 +2086,9 @@ function flyGrainTo(srcX, srcY, destX, destY, duration) {
     // Force layout so the initial position is painted
     void grain.offsetHeight;
 
-    // Add transition class and move
+    // Add transition class with dynamic duration and move
+    const durationSec = (duration / 1000).toFixed(2);
+    grain.style.transition = `left ${durationSec}s cubic-bezier(.2,.6,.35,1), top ${durationSec}s cubic-bezier(.2,.0,.35,1)`;
     grain.classList.add('in-flight');
     grain.style.left = (destX - 6) + 'px';
     grain.style.top = (destY - 6) + 'px';
@@ -1948,8 +2226,14 @@ async function executeTurn(side, pitIdx, animate) {
 
   let currentLinear = startLinear;
   let turnScores = { player: 0, opp: 0 };
+  let chainPickCount = 0; // Safety counter for infinite loop prevention
 
   while (true) {
+    // Safety: prevent infinite chain picks
+    if (++chainPickCount > MAX_CHAIN_PICKS) {
+      console.warn('Chain pick limit reached, force-ending turn');
+      break;
+    }
     if (animate) {
       // Build list of destination pits for this batch of distribution
       const destinations = [];
@@ -2522,35 +2806,24 @@ function startAiPreComputation(playerPitIdx) {
 //  TURN FLOW
 // ═══════════════════════════════════════════════
 async function endTurn() {
+  // Increment round move counter
+  roundMoveCount++;
+
+  // ─── FORCE END: too many moves in this round (infinite loop safety) ───
+  if (roundMoveCount >= MAX_ROUND_MOVES) {
+    console.warn('Max round moves reached, force-ending round');
+    await forceEndRound('Round ended — move limit reached');
+    return;
+  }
+
   // ─── CYCLE DETECTION: track board states to prevent infinite loops ───
   const stateKey = board.opp.join(',') + '|' + board.player.join(',') + '|' + (isPlayerTurn ? 'p' : 'o');
   boardStateHistory.push(stateKey);
   
-  // Count how many times this exact state has occurred
+  // Count how many times this exact state has occurred — reduced to 2 for faster detection
   const stateCount = boardStateHistory.filter(s => s === stateKey).length;
-  if (stateCount >= 3) {
-    // Cycle detected! End the round — each side keeps their remaining board grains
-    const playerBoardTotal = board.player.reduce((a, b) => a + b, 0);
-    const oppBoardTotal = board.opp.reduce((a, b) => a + b, 0);
-    scores.player += playerBoardTotal;
-    scores.opp += oppBoardTotal;
-    board.player.fill(0);
-    board.opp.fill(0);
-    renderAll();
-    gameOver = true;
-    isAnimating = false;
-    renderTurn();
-    setStatus('Round ended — cycle detected');
-    boardStateHistory = []; // Reset history
-    await sleep(500);
-
-    const playerTotalGrains = scores.player + bankedGrains.player;
-    const oppTotalGrains = scores.opp + bankedGrains.opp;
-    if (playerTotalGrains < INITIAL_GRAINS || oppTotalGrains < INITIAL_GRAINS) {
-      showGameOver();
-    } else {
-      showRoundEnd(playerTotalGrains, oppTotalGrains);
-    }
+  if (stateCount >= 2) {
+    await forceEndRound('Round ended — cycle detected');
     return;
   }
 
@@ -2567,6 +2840,7 @@ async function endTurn() {
     renderAll();
     gameOver = true;
     isAnimating = false;
+    isAiTurn = false;
     renderTurn();
     boardStateHistory = []; // Reset history
     await sleep(500);
@@ -2580,6 +2854,48 @@ async function endTurn() {
       showGameOver(); // Final match winner
     } else {
       showRoundEnd(playerTotalGrains, oppTotalGrains);
+    }
+    return;
+  }
+
+  // ─── STALEMATE DETECTION: check if the next player has any valid moves ───
+  const nextPlayerSide = isPlayerTurn ? 'opp' : 'player';
+  const currentPlayerSide = isPlayerTurn ? 'player' : 'opp';
+  const nextHasMoves = board[nextPlayerSide].some((v, i) => v > 0 && !isDeadPit(nextPlayerSide, i));
+  const currentHasMoves = board[currentPlayerSide].some((v, i) => v > 0 && !isDeadPit(currentPlayerSide, i));
+
+  if (!nextHasMoves && !currentHasMoves) {
+    // Neither side can play — stalemate! End the round.
+    await forceEndRound('Round ended — no valid moves for either side');
+    return;
+  }
+
+  if (!nextHasMoves) {
+    // Next player has no moves but current does — skip next player's turn
+    // Stay on current player's turn (don't flip)
+    renderTurn();
+    updateClickable();
+
+    if (gameMode === 'two') {
+      const who = isPlayerTurn ? 'Player 2' : 'Player 1';
+      setStatus(`${who} has no moves — ${isPlayerTurn ? 'Player 2' : 'Player 1'}, go again`);
+      isAnimating = false;
+      updateClickable();
+    } else {
+      if (!isPlayerTurn) {
+        // AI has no moves — give turn back to player
+        isPlayerTurn = true;
+        isAiTurn = false;
+        renderTurn();
+        setStatus('AI has no moves — your turn again');
+        isAnimating = false;
+        updateClickable();
+      } else {
+        // Player has moves, wait for click
+        setStatus('Opponent has no moves — your turn again');
+        isAnimating = false;
+        updateClickable();
+      }
     }
     return;
   }
@@ -2600,56 +2916,95 @@ async function endTurn() {
   } else {
     // Single player: AI takes over
     if (!isPlayerTurn) {
-      document.body.classList.add('ai-thinking');
-      setStatus('');
-      document.getElementById('turnDot').style.display = 'none';
-      
-      // Difficulty-based thinking delay
-      // For Very Easy/Easy/Medium: cosmetic delay only (computation is instant)
-      // For Hard: show indicator, yield to browser, then compute
-      let thinkDelay = 500;  // Very Easy
-      if (aiDepth === 1) thinkDelay = 1000;  // Easy
-      if (aiDepth === 2) thinkDelay = 1500;  // Medium
-      if (aiDepth === 3) thinkDelay = 800;   // Hard: short display then compute
-      
-      await sleep(thinkDelay);
-      
-      document.body.classList.remove('ai-thinking');
-      document.getElementById('turnDot').style.display = 'block';
+      isAiTurn = true;
       await aiTurn();
     } else {
+      isAiTurn = false;
       setStatus('Tap a pit on your side');
       isAnimating = false;
       updateClickable();
+      updateUndoButton();
+      updateResetRoundButton();
     }
   }
 }
 
-async function aiTurn() {
+// ─── Force end the round (called by cycle/stalemate/max-move detection) ───
+async function forceEndRound(message) {
+  const playerBoardTotal = board.player.reduce((a, b) => a + b, 0);
+  const oppBoardTotal = board.opp.reduce((a, b) => a + b, 0);
+  scores.player += playerBoardTotal;
+  scores.opp += oppBoardTotal;
+  board.player.fill(0);
+  board.opp.fill(0);
+  renderAll();
+  gameOver = true;
+  isAnimating = false;
+  isAiTurn = false;
+  renderTurn();
+  setStatus(message);
+  boardStateHistory = [];
+  await sleep(500);
+
+  const playerTotalGrains = scores.player + bankedGrains.player;
+  const oppTotalGrains = scores.opp + bankedGrains.opp;
+  if (playerTotalGrains < INITIAL_GRAINS || oppTotalGrains < INITIAL_GRAINS) {
+    showGameOver();
+  } else {
+    showRoundEnd(playerTotalGrains, oppTotalGrains);
+  }
+}
+
+async function aiTurn(saveSnapshot = true) {
+  // Track who picks first in this round (for alternation)
+  if (firstPickSide === null) firstPickSide = 'opp';
+  
+  if (saveSnapshot) saveUndoSnapshot();
+
   let move;
   
-  // Use pre-computed move if available (was computed during player's animation)
+  // Phase 1: AI Thinking (1.5s)
+  document.body.classList.add('ai-thinking');
+  setStatus('');
+  document.getElementById('turnDot').style.display = 'none';
+  await sleep(AI_THINK_MS);
+  
+  // Compute the move
   if (preComputedAiMove !== null && preComputedAiMove !== -1) {
-    // Verify the pre-computed move is still valid (board state matches)
     if (board.opp[preComputedAiMove] > 0) {
       move = preComputedAiMove;
     } else {
-      move = getBestAiMove(); // Fallback: recompute
+      move = getBestAiMove();
     }
     preComputedAiMove = null;
   } else {
     move = getBestAiMove();
   }
   
+  document.body.classList.remove('ai-thinking');
+  document.getElementById('turnDot').style.display = 'block';
+
   if (move === -1) {
-    // No moves, end
     isPlayerTurn = true;
     isAnimating = false;
+    isAiTurn = false;
     renderAll();
+    updateUndoButton();
     return;
   }
 
+  // Phase 2: Indicate the chosen pit (2s pulsing highlight)
+  const chosenPitEl = document.getElementById(`pit-opp-${move}`);
+  if (chosenPitEl) chosenPitEl.classList.add('ai-pit-indicator');
+  setStatus(`AI choosing pit ${move + 1}...`);
+  await sleep(AI_INDICATE_MS);
+  if (chosenPitEl) chosenPitEl.classList.remove('ai-pit-indicator');
+
+  // Phase 3: Pre-distribution pause (1.5s)
   setStatus(`AI plays pit ${move + 1}`);
+  await sleep(AI_PRE_DIST_MS);
+
+  // Phase 4: Execute the turn with AI-specific grain timing
   await executeTurn('opp', move, true);
   await endTurn();
 }
@@ -2660,9 +3015,16 @@ async function playerTurnFlow(idx) {
   if (!isPlayerTurn || isAnimating || gameOver) return;
   if (board.player[idx] === 0) return;
 
+  // Track who picks first in this round (for alternation)
+  if (firstPickSide === null) firstPickSide = 'player';
+
+  // Save undo snapshot BEFORE executing the move
+  saveUndoSnapshot();
+
   AudioManager.pitSelect();
   isAnimating = true;
   updateClickable();
+  updateUndoButton();
 
   // Pre-compute AI's response while player's animation plays
   // Only for Easy/Medium (instant computation). Hard mode computes after animation.
@@ -2679,20 +3041,192 @@ function onPitClick(idx) {
   playerTurnFlow(idx);
 }
 
+function saveUndoSnapshot() {
+  moveHistory.push({
+    board: { opp: [...board.opp], player: [...board.player] },
+    scores: { ...scores },
+    isPlayerTurn: isPlayerTurn,
+    deadPits: { opp: [...deadPits.opp], player: [...deadPits.player] },
+    boardStateHistory: [...boardStateHistory],
+    roundMoveCount: roundMoveCount
+  });
+}
+
 // Opponent pit click (two-player mode)
 function onOppPitClick(idx) {
   if (gameMode !== 'two') return;
   if (isPlayerTurn || isAnimating || gameOver) return;
   if (board.opp[idx] === 0) return;
 
+  // Track who picks first in this round (for alternation)
+  if (firstPickSide === null) firstPickSide = 'opp';
+
+  saveUndoSnapshot();
+
   isAnimating = true;
   updateClickable();
+  updateUndoButton();
   oppTurnFlow(idx);
 }
 
 async function oppTurnFlow(idx) {
   await executeTurn('opp', idx, true);
   await endTurn();
+}
+
+// ═══════════════════════════════════════════════
+//  UNDO / BACK / RESET
+// ═══════════════════════════════════════════════
+function undoLastMove() {
+  if (moveHistory.length === 0 || isAnimating || isAiTurn || gameOver) return;
+  
+  clearAllTimeouts();
+  const snapshot = moveHistory.pop();
+  
+  board.opp = [...snapshot.board.opp];
+  board.player = [...snapshot.board.player];
+  scores = { ...snapshot.scores };
+  isPlayerTurn = snapshot.isPlayerTurn;
+  deadPits.opp = [...snapshot.deadPits.opp];
+  deadPits.player = [...snapshot.deadPits.player];
+  boardStateHistory = [...snapshot.boardStateHistory];
+  roundMoveCount = snapshot.roundMoveCount;
+  
+  gameOver = false;
+  isAnimating = false;
+  isAiTurn = false;
+  preComputedAiMove = null;
+  
+  document.body.classList.remove('ai-thinking');
+  document.getElementById('turnDot').style.display = 'block';
+  document.querySelectorAll('.pit').forEach(p => p.classList.remove('ai-pit-indicator'));
+  
+  renderAll();
+  updateUndoButton();
+  updatePrevRoundButton();
+  updateResetRoundButton();
+  setStatus('Move undone — tap a pit on your side');
+  AudioManager.click();
+
+  // If we restored to an AI turn, trigger AI turn again
+  if (gameMode === 'single' && !isPlayerTurn) {
+    setStatus('AI is thinking...');
+    isAiTurn = true;
+    sleep(400).then(() => aiTurn(false)); // pass false to avoid saving snapshot again immediately
+  }
+}
+
+function updateUndoButton() {
+  const btn = document.getElementById('undoBtn');
+  if (!btn) return;
+  // Let player undo at any time it's their turn, or if they are in 2-player mode.
+  // In single player during their turn, it undoes the AI's last move!
+  const canUndo = moveHistory.length > 0 && !isAnimating && !isAiTurn && !gameOver;
+  btn.style.display = canUndo ? 'flex' : 'none';
+}
+
+function resetCurrentRound() {
+  if (isAnimating || gameOver) return;
+  
+  // The first snapshot in moveHistory for this round is the initial state of the round.
+  // If there's no moveHistory, we're already at the start.
+  if (moveHistory.length === 0) return;
+  
+  clearAllTimeouts();
+  // Find the snapshot with roundMoveCount = 0 (the start of the round)
+  let startSnapshot = moveHistory[0];
+  
+  board.opp = [...startSnapshot.board.opp];
+  board.player = [...startSnapshot.board.player];
+  scores = { ...startSnapshot.scores };
+  isPlayerTurn = startSnapshot.isPlayerTurn;
+  deadPits.opp = [...startSnapshot.deadPits.opp];
+  deadPits.player = [...startSnapshot.deadPits.player];
+  boardStateHistory = [];
+  roundMoveCount = 0;
+  
+  gameOver = false;
+  isAnimating = false;
+  isAiTurn = false;
+  preComputedAiMove = null;
+  moveHistory = []; // clear history since we restarted the round
+  
+  document.body.classList.remove('ai-thinking');
+  document.getElementById('turnDot').style.display = 'block';
+  document.querySelectorAll('.pit').forEach(p => p.classList.remove('ai-pit-indicator'));
+  
+  renderAll();
+  updateUndoButton();
+  updatePrevRoundButton();
+  updateResetRoundButton();
+  setStatus('Round reset — tap a pit to begin');
+  AudioManager.click();
+
+  if (gameMode === 'single' && !isPlayerTurn) {
+    setStatus('AI is thinking...');
+    isAiTurn = true;
+    sleep(400).then(() => aiTurn());
+  }
+}
+
+function updateResetRoundButton() {
+  const btn = document.getElementById('resetRoundBtn');
+  if (!btn) return;
+  btn.style.opacity = moveHistory.length > 0 ? '1' : '0.3';
+  btn.style.pointerEvents = moveHistory.length > 0 ? 'auto' : 'none';
+}
+
+// ═══════════════════════════════════════════════
+//  GO TO PREVIOUS ROUND
+// ═══════════════════════════════════════════════
+function goToPreviousRound() {
+  if (roundHistory.length === 0 || isAnimating) return;
+  
+  clearAllTimeouts();
+  const snapshot = roundHistory.pop();
+  
+  board.opp = [...snapshot.board.opp];
+  board.player = [...snapshot.board.player];
+  scores = { ...snapshot.scores };
+  bankedGrains = { ...snapshot.bankedGrains };
+  deadPits.opp = [...snapshot.deadPits.opp];
+  deadPits.player = [...snapshot.deadPits.player];
+  roundNumber = snapshot.roundNumber;
+  firstPickSide = snapshot.firstPickSide;
+  isPlayerTurn = snapshot.isPlayerTurn;
+  
+  gameOver = false;
+  isAnimating = false;
+  isAiTurn = false;
+  preComputedAiMove = null;
+  boardStateHistory = [];
+  roundMoveCount = 0;
+  moveHistory = [];
+  lastTurnSide = null;
+  
+  document.body.classList.remove('ai-thinking');
+  document.getElementById('turnDot').style.display = 'block';
+  document.querySelectorAll('.pit').forEach(p => p.classList.remove('ai-pit-indicator'));
+  
+  renderAll();
+  document.getElementById('roundBadge').textContent = `Round ${roundNumber}`;
+  updateUndoButton();
+  updatePrevRoundButton();
+  updateResetRoundButton();
+  setStatus(`Reverted to Round ${roundNumber} — tap a pit to begin`);
+  AudioManager.click();
+  
+  // If AI should go first in this round, trigger AI turn
+  if (gameMode === 'single' && !isPlayerTurn) {
+    sleep(400).then(() => aiTurn());
+  }
+}
+
+function updatePrevRoundButton() {
+  const btn = document.getElementById('prevRoundBtn');
+  if (!btn) return;
+  btn.style.opacity = roundHistory.length > 0 ? '1' : '0.3';
+  btn.style.pointerEvents = roundHistory.length > 0 ? 'auto' : 'none';
 }
 
 // ═══════════════════════════════════════════════
@@ -2899,29 +3433,55 @@ function setupNextRound() {
   bankedGrains.player = 0;
   bankedGrains.opp = 0;
 
-  // Turn order: the player who DIDN'T play last goes first
-  if (lastTurnSide === 'player') {
-    isPlayerTurn = false;  // opp goes first
+  // Turn order: ALTERNATE based on who picked first THIS round
+  // If player picked first this round → opp picks first next round, and vice versa
+  if (firstPickSide === 'player') {
+    isPlayerTurn = false;  // opp goes first next round
+  } else if (firstPickSide === 'opp') {
+    isPlayerTurn = true;   // player goes first next round
   } else {
-    isPlayerTurn = true;   // player goes first
+    // Fallback: use lastTurnSide
+    isPlayerTurn = lastTurnSide === 'player' ? false : true;
   }
 
   // Increment round
   roundNumber++;
   gameOver = false;
   isAnimating = false;
+  isAiTurn = false;
   lastTurnSide = null;
   boardStateHistory = []; // Reset cycle detection for new round
+  roundMoveCount = 0;
+  moveHistory = [];
+  
+  // Save the NEW first pick side for this upcoming round (will be set on first move)
+  const previousFirstPick = firstPickSide;
+  firstPickSide = null; // Reset — will be set when someone actually picks first
+
+  // Save round-start snapshot for "go to previous round"
+  roundHistory.push({
+    board: { opp: [...board.opp], player: [...board.player] },
+    scores: { ...scores },
+    bankedGrains: { ...bankedGrains },
+    deadPits: { opp: [...deadPits.opp], player: [...deadPits.player] },
+    roundNumber: roundNumber,
+    firstPickSide: previousFirstPick,
+    isPlayerTurn: isPlayerTurn
+  });
 
   // Render
   renderAll();
   document.getElementById('roundBadge').textContent = `Round ${roundNumber}`;
+  updateUndoButton();
+  updatePrevRoundButton();
+  updateResetRoundButton();
 
   if (gameMode === 'two') {
     const who = isPlayerTurn ? 'Player 2' : 'Player 1';
     setStatus(`Round ${roundNumber} — ${who}, tap a pit on your side`);
   } else {
     if (!isPlayerTurn) {
+      isAiTurn = true;
       setStatus('Round ' + roundNumber + ' — AI is thinking...');
       sleep(400).then(() => aiTurn());
     } else {
@@ -2959,8 +3519,11 @@ function resetGame() {
 function showNewGameModal() {
   clearAllTimeouts();
   isAnimating = false;
+  isAiTurn = false;
   gameOver = false;
   preComputedAiMove = null;
+  document.body.classList.remove('ai-thinking');
+  document.getElementById('coinTossOverlay').classList.remove('show');
   document.getElementById('modeSelectView').style.display = '';
   document.getElementById('diffSelectView').style.display = 'none';
   document.getElementById('modeSubtitle').textContent = 'Choose Game Mode';
@@ -2992,6 +3555,8 @@ function chooseTwoPlayer() {
   // In two-player, opponent (Player 1) goes first
   isPlayerTurn = false;
   renderAll();
+  updateUndoButton();
+  updatePrevRoundButton();
   setStatus('Player 1 — tap a pit on your side');
 }
 
@@ -3032,7 +3597,7 @@ function startNewGame() {
   if (gameMode === 'single') {
     diffBadge.style.display = 'inline-block';
     const diffNames = { 0: 'VERY EASY', 1: 'EASY', 2: 'MEDIUM', 3: 'HARD' };
-    diffBadge.textContent = diffNames[aiDepth] || 'MEDIUM';
+    diffBadge.textContent = diffNames[aiDepth] || 'EASY';
   } else {
     diffBadge.style.display = 'none';
   }
@@ -3042,8 +3607,8 @@ function startNewGame() {
   if (gameMode === 'single') {
     const levelNames = { 0: 'Very Easy', 1: 'Easy', 2: 'Medium', 3: 'Hard' };
     const levelClasses = { 0: 'level-veryeasy', 1: 'level-easy', 2: 'level-medium', 3: 'level-hard' };
-    levelBadge.textContent = levelNames[aiDepth] || 'Medium';
-    levelBadge.className = 'game-level-badge ' + (levelClasses[aiDepth] || 'level-medium');
+    levelBadge.textContent = levelNames[aiDepth] || 'Easy';
+    levelBadge.className = 'game-level-badge ' + (levelClasses[aiDepth] || 'level-easy');
     levelBadge.style.display = 'flex';
   } else {
     levelBadge.style.display = 'none';
@@ -3051,7 +3616,76 @@ function startNewGame() {
 
   initBoard();
   renderAll();
-  setStatus('Tap a pit on your side to begin');
+  updateUndoButton();
+  updatePrevRoundButton();
+
+  // Show coin toss for first round in single-player mode
+  showCoinToss();
+}
+
+// ═══════════════════════════════════════════════
+//  COIN TOSS (First Round, Single Player)
+// ═══════════════════════════════════════════════
+function showCoinToss() {
+  const overlay = document.getElementById('coinTossOverlay');
+  const coin = document.getElementById('coinElement');
+  const resultText = document.getElementById('coinResultText');
+  const tossBtn = document.getElementById('coinTossBtn');
+  
+  overlay.classList.add('show');
+  coin.className = 'coin'; // Reset
+  resultText.textContent = '';
+  tossBtn.style.display = 'inline-block';
+  tossBtn.disabled = false;
+  setStatus('Toss the coin to decide who goes first!');
+}
+
+function performCoinToss() {
+  const coin = document.getElementById('coinElement');
+  const resultText = document.getElementById('coinResultText');
+  const tossBtn = document.getElementById('coinTossBtn');
+  
+  tossBtn.disabled = true;
+  AudioManager.click();
+  
+  // Random result: 0 = heads (player first), 1 = tails (AI first)
+  const result = Math.random() < 0.5 ? 'heads' : 'tails';
+  
+  // Add flip animation class
+  coin.className = 'coin flipping';
+  
+  // After flip animation (1.8s), show result
+  safeTimeout(() => {
+    coin.className = `coin result-${result}`;
+    
+    if (result === 'heads') {
+      resultText.textContent = '🎯 You go first!';
+      resultText.style.color = 'var(--player-accent)';
+      isPlayerTurn = true;
+      firstPickSide = null; // Will be set on first pick
+    } else {
+      resultText.textContent = '🤖 AI goes first!';
+      resultText.style.color = 'var(--opponent-accent)';
+      isPlayerTurn = false;
+      firstPickSide = null;
+    }
+    
+    tossBtn.style.display = 'none';
+    
+    // After showing result for 1.5s, start the game
+    safeTimeout(() => {
+      document.getElementById('coinTossOverlay').classList.remove('show');
+      renderAll();
+      
+      if (!isPlayerTurn) {
+        isAiTurn = true;
+        setStatus('AI is thinking...');
+        sleep(400).then(() => aiTurn());
+      } else {
+        setStatus('Your turn — tap a pit on your side');
+      }
+    }, 1500);
+  }, 1800);
 }
 
 function updateLabels() {

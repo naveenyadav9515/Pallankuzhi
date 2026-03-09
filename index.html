@@ -1504,8 +1504,8 @@
       <p style="font-size:0.85rem; font-weight:600; color:var(--text-dim); margin-bottom:12px; text-transform:uppercase; letter-spacing:1px;">Select Difficulty</p>
       <div class="difficulty-select" style="flex-wrap:wrap;">
         <button class="difficulty-btn" data-level="0" onclick="selectDifficulty(0)">Very Easy</button>
-        <button class="difficulty-btn active" data-level="1" onclick="selectDifficulty(1)">Easy</button>
-        <button class="difficulty-btn" data-level="2" onclick="selectDifficulty(2)">Medium</button>
+        <button class="difficulty-btn" data-level="1" onclick="selectDifficulty(1)">Easy</button>
+        <button class="difficulty-btn active" data-level="2" onclick="selectDifficulty(2)">Medium</button>
         <button class="difficulty-btn" data-level="3" onclick="selectDifficulty(3)">Hard</button>
       </div>
       <button class="btn btn-primary" onclick="startNewGame()" style="margin-top:12px; width:100%">Start Game</button>
@@ -1644,8 +1644,8 @@ function toggleSound() {
 // ═══════════════════════════════════════════════
 const PITS_PER_SIDE = 7;
 const INITIAL_GRAINS = 5;
-const GRAIN_FLY_MS = 400;    // Time for each grain to fly
-const GRAIN_STAGGER_MS = 100;  // Pause after landing before next grain flies
+const GRAIN_FLY_MS = 600;    // Time for each grain to fly
+const GRAIN_STAGGER_MS = 150;  // Pause after landing before next grain flies
 const AI_THINK_MS = 1500;     // AI thinking phase
 const AI_INDICATE_MS = 2000;  // AI pit indication phase
 const AI_PRE_DIST_MS = 1500;  // Pause before AI distribution

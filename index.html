@@ -1644,8 +1644,8 @@ function toggleSound() {
 // ═══════════════════════════════════════════════
 const PITS_PER_SIDE = 7;
 const INITIAL_GRAINS = 5;
-const GRAIN_FLY_MS = 1250;    // Time for each grain distribution (both sides)
-const GRAIN_STAGGER_MS = 100; // Stagger between each grain departure
+const GRAIN_FLY_MS = 750;    // Time for each grain distribution (both sides)
+const GRAIN_STAGGER_MS = 750; // Stagger between each grain departure
 const AI_THINK_MS = 1500;     // AI thinking phase
 const AI_INDICATE_MS = 2000;  // AI pit indication phase
 const AI_PRE_DIST_MS = 1500;  // Pause before AI distribution
@@ -1761,10 +1761,10 @@ function createPitEl(side, idx) {
 
   if (side === 'player') {
     pit.addEventListener('click', () => onPitClick(idx));
-    pit.addEventListener('touchstart', (e) => { e.preventDefault(); onPitClick(idx); }, { passive: false });
+    pit.addEventListener('touchstart', (e) => { if (e.cancelable) e.preventDefault(); onPitClick(idx); }, { passive: false });
   } else {
     pit.addEventListener('click', () => onOppPitClick(idx));
-    pit.addEventListener('touchstart', (e) => { e.preventDefault(); onOppPitClick(idx); }, { passive: false });
+    pit.addEventListener('touchstart', (e) => { if (e.cancelable) e.preventDefault(); onOppPitClick(idx); }, { passive: false });
   }
 
   return pit;
@@ -2460,15 +2460,20 @@ function executeTurnSim(boardState, scoresState, side, pitIdx) {
 }
 
 // ═══════════════════════════════════════════════
-//  AI ENGINE (4-Level Difficulty System)
+//  AI ENGINE (WEB WORKER)
 // ═══════════════════════════════════════════════
-function getValidMoves(boardState, side) {
-  const moves = [];
-  for (let i = 0; i < PITS_PER_SIDE; i++) {
-    if (boardState[side][i] > 0) moves.push(i);
-  }
-  return moves;
-}
+
+// The AI Worker script as a string to avoid external file dependencies
+const aiWorkerCode = `
+// Constants
+const PITS_PER_SIDE = 7;
+const AI_MAX_NODES = 5000000; // Increased capacity for background thinking
+let _aiNodeCount = 0;
+let _aiTimedOut = false;
+let _aiMoveStartTime = 0;
+let _timeBudget = 0;
+let _transpositionTable = new Map();
+let _deadPits = null; // Passed from main thread
 
 // Helper to shuffle an array (Fisher-Yates)
 function shuffleArray(array) {
@@ -2478,73 +2483,131 @@ function shuffleArray(array) {
   }
 }
 
-// ─── Heuristic evaluation for Hard mode minimax ───
-// Evaluates how favorable a board state is for the AI (opp)
+function getValidMoves(boardState, side) {
+  const moves = [];
+  for (let i = 0; i < PITS_PER_SIDE; i++) {
+    if (boardState[side][i] > 0) moves.push(i);
+  }
+  return moves;
+}
+
+// Non-animated version for AI simulation
+function executeTurnSim(boardState, scoresState, side, pitIdx) {
+  const b = { opp: [...boardState.opp], player: [...boardState.player] };
+  const s = { player: scoresState.player, opp: scoresState.opp };
+
+  function toLinear(sd, id) {
+    return sd === 'player' ? id : 7 + (6 - id);
+  }
+  function fromLinear(lin) {
+    lin = ((lin % 14) + 14) % 14;
+    if (lin < 7) return { sd: 'player', id: lin };
+    return { sd: 'opp', id: 6 - (lin - 7) };
+  }
+  function nextLive(cur) {
+    let steps = 0, n = cur;
+    do {
+      n = (n + 1) % 14;
+      steps++;
+      const p = fromLinear(n);
+      if (!_deadPits[p.sd][p.id]) return n;
+    } while (steps < 14);
+    return (cur + 1) % 14;
+  }
+
+  const startLinear = toLinear(side, pitIdx);
+  let hand = b[side][pitIdx];
+  b[side][pitIdx] = 0;
+  let currentLinear = startLinear;
+  let simLoopCount = 0;
+
+  while (true) {
+    if (++simLoopCount > 1000) break;
+    while (hand > 0) {
+      currentLinear = nextLive(currentLinear);
+      const p = fromLinear(currentLinear);
+      b[p.sd][p.id]++;
+      hand--;
+
+      // Instant-4
+      if (b[p.sd][p.id] === 4) {
+        s[p.sd] += 4;
+        b[p.sd][p.id] = 0;
+      }
+    }
+
+    const nextLinear = nextLive(currentLinear);
+    const n = fromLinear(nextLinear);
+
+    if (b[n.sd][n.id] > 0) {
+      hand = b[n.sd][n.id];
+      b[n.sd][n.id] = 0;
+      currentLinear = nextLinear;
+    } else {
+      const captureLinear = nextLive(nextLinear);
+      const c = fromLinear(captureLinear);
+      const cGrains = b[c.sd][c.id];
+      if (cGrains > 0) {
+        s[side] += cGrains;
+        b[c.sd][c.id] = 0;
+      }
+      break;
+    }
+  }
+
+  return { board: b, scores: s };
+}
+
 function evaluateBoard(boardState, scoresState) {
-  // Calculate total seeds on each side
   let aiSeeds = 0, playerSeeds = 0;
   for (let i = 0; i < PITS_PER_SIDE; i++) {
     aiSeeds += boardState.opp[i];
     playerSeeds += boardState.player[i];
   }
 
-  // ★ ROUND-WINNING DETECTION: highest priority!
-  // If opponent's board is empty, AI wins the round (gets all its remaining seeds as score)
   if (playerSeeds === 0) {
     const finalScore = (scoresState.opp + aiSeeds) - scoresState.player;
-    return 10000 + finalScore; // Massive bonus for winning the round
+    return 10000 + finalScore; 
   }
-  // If AI's board is empty, opponent wins the round (disaster)
   if (aiSeeds === 0) {
     const finalScore = scoresState.opp - (scoresState.player + playerSeeds);
-    return -10000 + finalScore; // Massive penalty for losing
+    return -10000 + finalScore; 
   }
 
-  // 1. Score difference (most important factor)
   const scoreDiff = scoresState.opp - scoresState.player;
-
-  // 2. Board control / seed drain: heavily reward draining opponent's seeds
   const seedControl = aiSeeds - playerSeeds;
-
-  // 3. Opponent drain bonus: the fewer seeds opponent has, the closer we are to winning
-  // Exponentially reward draining opponent (especially when they're nearly empty)
   let drainBonus = 0;
-  if (playerSeeds <= 3) drainBonus = 15;      // Very close to wiping out
-  else if (playerSeeds <= 7) drainBonus = 8;   // Getting close
-  else if (playerSeeds <= 14) drainBonus = 3;  // Making progress
+  if (playerSeeds <= 3) drainBonus = 15;      
+  else if (playerSeeds <= 7) drainBonus = 8;   
+  else if (playerSeeds <= 14) drainBonus = 3;  
 
-  // 4. Capture potential: pits with 3 seeds (one drop away from instant-4 capture)
   let aiCapturePotential = 0, playerCapturePotential = 0;
   for (let i = 0; i < PITS_PER_SIDE; i++) {
     if (boardState.opp[i] === 3) aiCapturePotential++;
     if (boardState.player[i] === 3) playerCapturePotential++;
   }
 
-  // 5. Empty pit advantage: empty pits can lead to captures (self-contained, no global refs)
   let aiEmptyPits = 0, playerEmptyPits = 0;
   for (let i = 0; i < PITS_PER_SIDE; i++) {
     if (boardState.opp[i] === 0) aiEmptyPits++;
     if (boardState.player[i] === 0) playerEmptyPits++;
   }
 
-  // 6. Active pits count: more active pits = more options
   let aiActivePits = 0, playerActivePits = 0;
   for (let i = 0; i < PITS_PER_SIDE; i++) {
     if (boardState.opp[i] > 0) aiActivePits++;
     if (boardState.player[i] > 0) playerActivePits++;
   }
 
-  // Weighted evaluation
-  return (scoreDiff * 10) +         // Score is king
-         (seedControl * 3) +         // Board control matters
-         (drainBonus) +              // Reward draining opponent toward 0
-         (aiCapturePotential * 3) -   // Our capture setups
-         (playerCapturePotential * 3) + // Penalize opponent setups
-         ((playerEmptyPits - aiEmptyPits) * 1.5) + // More empty pits on opponent = closer to wipe-out
-         ((aiActivePits - playerActivePits) * 2); // Mobility advantage: more options = much better
+  return (scoreDiff * 10) +         
+         (seedControl * 3) +         
+         (drainBonus) +              
+         (aiCapturePotential * 3) -   
+         (playerCapturePotential * 3) + 
+         ((playerEmptyPits - aiEmptyPits) * 1.5) + 
+         ((aiActivePits - playerActivePits) * 2); 
 }
 
-// ─── Pre-evaluate moves with 1-ply for move ordering (Hard mode) ───
 function preEvaluateMoves(boardState, scoresState, side) {
   const validMoves = getValidMoves(boardState, side);
   const evaluated = [];
@@ -2553,7 +2616,6 @@ function preEvaluateMoves(boardState, scoresState, side) {
     const score = evaluateBoard(sim.board, sim.scores);
     evaluated.push({ move, score, sim });
   }
-  // Sort: AI (opp) wants highest score, player wants lowest
   if (side === 'opp') {
     evaluated.sort((a, b) => b.score - a.score);
   } else {
@@ -2562,16 +2624,7 @@ function preEvaluateMoves(boardState, scoresState, side) {
   return evaluated;
 }
 
-// ─── Time-bounded Minimax with Alpha-Beta Pruning + Transposition Table ───
-let _aiNodeCount = 0;
-let _aiTimedOut = false;
-const AI_TIME_BUDGET = 4500; // 4.5 seconds max (aggressive)
-const AI_MAX_NODES = 1000000; // 1M node safety cap
-let _transpositionTable = new Map(); // Cache evaluated positions
-
-// Fast board hash for transposition table
 function boardHash(boardState, scoresState, depth, isMax) {
-  // Use a string key (fast enough for JS)
   let key = '';
   for (let i = 0; i < PITS_PER_SIDE; i++) key += boardState.opp[i] + ',';
   key += '|';
@@ -2583,9 +2636,9 @@ function boardHash(boardState, scoresState, depth, isMax) {
 function minimaxAB(boardState, scoresState, depth, alpha, beta, isMaximizing) {
   _aiNodeCount++;
 
-  // Time/node check every 500 nodes
+  // IMPORTANT: The worker strictly obeys the timeBudget passed in.
   if (_aiNodeCount % 500 === 0) {
-    if (Date.now() - aiMoveStartTime > AI_TIME_BUDGET || _aiNodeCount > AI_MAX_NODES) {
+    if (Date.now() - _aiMoveStartTime > _timeBudget || _aiNodeCount > AI_MAX_NODES) {
       _aiTimedOut = true;
       return evaluateBoard(boardState, scoresState);
     }
@@ -2595,7 +2648,6 @@ function minimaxAB(boardState, scoresState, depth, alpha, beta, isMaximizing) {
     return evaluateBoard(boardState, scoresState);
   }
 
-  // Terminal: depth 0 or no moves
   const side = isMaximizing ? 'opp' : 'player';
   const validMoves = getValidMoves(boardState, side);
 
@@ -2603,14 +2655,12 @@ function minimaxAB(boardState, scoresState, depth, alpha, beta, isMaximizing) {
     return evaluateBoard(boardState, scoresState);
   }
 
-  // Check if game would end
   const oppTotal = boardState.opp.reduce((a, b) => a + b, 0);
   const playerTotal = boardState.player.reduce((a, b) => a + b, 0);
   if (oppTotal === 0 || playerTotal === 0) {
     return evaluateBoard(boardState, scoresState);
   }
 
-  // Transposition table lookup
   const hashKey = boardHash(boardState, scoresState, depth, isMaximizing);
   if (_transpositionTable.has(hashKey)) {
     return _transpositionTable.get(hashKey);
@@ -2618,7 +2668,6 @@ function minimaxAB(boardState, scoresState, depth, alpha, beta, isMaximizing) {
 
   if (isMaximizing) {
     let maxEval = -Infinity;
-    // Move ordering at depth >= 2 for better pruning
     const orderedMoves = (depth >= 2) ? preEvaluateMoves(boardState, scoresState, 'opp').map(m => m.move) : validMoves;
     for (const move of orderedMoves) {
       if (_aiTimedOut) break;
@@ -2626,9 +2675,8 @@ function minimaxAB(boardState, scoresState, depth, alpha, beta, isMaximizing) {
       const evalScore = minimaxAB(sim.board, sim.scores, depth - 1, alpha, beta, false);
       maxEval = Math.max(maxEval, evalScore);
       alpha = Math.max(alpha, evalScore);
-      if (beta <= alpha) break; // Alpha-beta prune
+      if (beta <= alpha) break; 
     }
-    // Store in transposition table
     if (!_aiTimedOut) _transpositionTable.set(hashKey, maxEval);
     return maxEval;
   } else {
@@ -2640,34 +2688,29 @@ function minimaxAB(boardState, scoresState, depth, alpha, beta, isMaximizing) {
       const evalScore = minimaxAB(sim.board, sim.scores, depth - 1, alpha, beta, true);
       minEval = Math.min(minEval, evalScore);
       beta = Math.min(beta, evalScore);
-      if (beta <= alpha) break; // Alpha-beta prune
+      if (beta <= alpha) break; 
     }
     if (!_aiTimedOut) _transpositionTable.set(hashKey, minEval);
     return minEval;
   }
 }
 
-// ─── Iterative Deepening wrapper for Hard mode ───
 function getBestMoveHard(boardState, scoresState) {
-  aiMoveStartTime = Date.now();
   const validMoves = getValidMoves(boardState, 'opp');
   if (validMoves.length === 0) return -1;
-  if (validMoves.length === 1) return validMoves[0]; // Only one choice
+  if (validMoves.length === 1) return validMoves[0]; 
 
   let bestMove = validMoves[0];
   let bestScore = -Infinity;
-
-  // Clear transposition table for each new move decision
   _transpositionTable = new Map();
 
-  // Iterative deepening: start shallow, go deeper if time allows
-  for (let depth = 1; depth <= 15; depth++) {
+  // Max depth 30 to heavily utilize long time budgets
+  for (let depth = 1; depth <= 30; depth++) {
     _aiNodeCount = 0;
     _aiTimedOut = false;
     let currentBestMove = validMoves[0];
     let currentBestScore = -Infinity;
 
-    // Pre-sort moves at top level for better pruning
     const orderedMoves = preEvaluateMoves(boardState, scoresState, 'opp');
 
     for (const { move } of orderedMoves) {
@@ -2680,127 +2723,198 @@ function getBestMoveHard(boardState, scoresState) {
       }
     }
 
-    // Only use results from fully completed depths
     if (!_aiTimedOut) {
       bestMove = currentBestMove;
       bestScore = currentBestScore;
-      console.log(`AI depth ${depth}: best move ${bestMove}, score ${bestScore}, nodes ${_aiNodeCount}`);
+      // Post progress updates
+      self.postMessage({ type: 'progress', depth, move: bestMove, score: bestScore, nodes: _aiNodeCount });
     } else {
-      break; // Ran out of time, use last completed depth
+      break; 
     }
 
-    // Check if we've used too much time to start next depth
-    if (Date.now() - aiMoveStartTime > AI_TIME_BUDGET * 0.6) break;
+    // Stop going deeper if we have very little time left
+    if (Date.now() - _aiMoveStartTime > _timeBudget * 0.8) break;
   }
 
-  console.log(`AI final: move ${bestMove}, score ${bestScore}, time ${Date.now() - aiMoveStartTime}ms`);
   return bestMove;
 }
 
-// ─── Main AI move selector (dispatches by difficulty) ───
-function getBestAiMove(bState, sState) {
-  // Use passed state (for pre-computation) or fallback to global
-  const b = bState || board;
-  const s = sState || scores;
+// ── LEVEL 0: VERY EASY
+function getBestMoveVeryEasy(b, s) {
   const validMoves = getValidMoves(b, 'opp');
   if (validMoves.length === 0) return -1;
+  const scored = [];
+  for (const move of validMoves) {
+    const sim = executeTurnSim(b, s, 'opp', move);
+    const diff = (sim.scores.opp - s.opp) - (sim.scores.player - s.player);
+    scored.push({ move, diff });
+  }
+  scored.sort((a, b) => a.diff - b.diff); 
+  if (Math.random() < 0.7) return scored[0].move;
+  return validMoves[Math.floor(Math.random() * validMoves.length)];
+}
 
-  // ── LEVEL 0: VERY EASY — deliberately picks bad moves ──
-  if (aiDepth === 0) {
-    // Evaluate all moves, pick the WORST for AI (best for opponent)
-    const scored = [];
-    for (const move of validMoves) {
-      const sim = executeTurnSim(b, s, 'opp', move);
-      const diff = (sim.scores.opp - s.opp) - (sim.scores.player - s.player);
-      scored.push({ move, diff });
+// ── LEVEL 1: EASY
+function getBestMoveEasy(b, s) {
+  const validMoves = getValidMoves(b, 'opp');
+  if (validMoves.length === 0) return -1;
+  if (Math.random() < 0.6) return validMoves[Math.floor(Math.random() * validMoves.length)];
+  let bestMove = validMoves[0], bestGain = -Infinity;
+  for (const move of validMoves) {
+    const sim = executeTurnSim(b, s, 'opp', move);
+    const gain = sim.scores.opp - s.opp;
+    if (gain > bestGain) { bestGain = gain; bestMove = move; }
+  }
+  return bestMove;
+}
+
+// ── LEVEL 2: MEDIUM
+function getBestMoveMedium(b, s) {
+  const validMoves = getValidMoves(b, 'opp');
+  if (validMoves.length === 0) return -1;
+  if (Math.random() < 0.2) return validMoves[Math.floor(Math.random() * validMoves.length)];
+  const scored = [];
+  for (const move of validMoves) {
+    const sim = executeTurnSim(b, s, 'opp', move);
+    const aiGains = sim.scores.opp - s.opp;
+    const playerGains = sim.scores.player - s.player;
+    const playerMoves = getValidMoves(sim.board, 'player');
+    let maxPlayerResponse = 0;
+    for (const pm of playerMoves) {
+      const sim2 = executeTurnSim(sim.board, sim.scores, 'player', pm);
+      const pg = sim2.scores.player - sim.scores.player;
+      if (pg > maxPlayerResponse) maxPlayerResponse = pg;
     }
-    scored.sort((a, b) => a.diff - b.diff); // Worst first
+    const diff = aiGains - Math.max(playerGains, maxPlayerResponse);
+    scored.push({ move, diff });
+  }
+  shuffleArray(scored); 
+  scored.sort((a, b) => b.diff - a.diff);
+  return scored[0].move;
+}
 
-    // 70% pick worst move, 30% pure random
-    if (Math.random() < 0.7) {
-      return scored[0].move;
-    } else {
-      return validMoves[Math.floor(Math.random() * validMoves.length)];
+self.onmessage = function(e) {
+  const data = e.data;
+  if (data.type === 'compute') {
+    _deadPits = data.deadPits;
+    _timeBudget = data.timeBudget;
+    _aiMoveStartTime = Date.now();
+    
+    let move = -1;
+    if (data.depth === 0) move = getBestMoveVeryEasy(data.board, data.scores);
+    else if (data.depth === 1) move = getBestMoveEasy(data.board, data.scores);
+    else if (data.depth === 2) move = getBestMoveMedium(data.board, data.scores);
+    else if (data.depth === 3) move = getBestMoveHard(data.board, data.scores);
+    
+    const finalNodeCount = _aiNodeCount;
+    self.postMessage({ type: 'result', move: move, nodesTotal: finalNodeCount });
+  }
+};
+`;
+
+const aiWorkerBlob = new Blob([aiWorkerCode], { type: 'application/javascript' });
+const aiWorkerUrl = URL.createObjectURL(aiWorkerBlob);
+let aiWorker = new Worker(aiWorkerUrl);
+
+let bgAiMoveResolve = null;
+let bgAiCurrentBestMove = -1;
+let bgAiMaxDepth = 0;
+let bgAiStartTime = 0;
+
+aiWorker.onmessage = function(e) {
+  const data = e.data;
+  if (data.type === 'progress') {
+    // Keep track of the best move found so far in case we abort
+    bgAiCurrentBestMove = data.move;
+    bgAiMaxDepth = data.depth;
+  } else if (data.type === 'result') {
+    if (bgAiMoveResolve) {
+      const elapsed = Date.now() - bgAiStartTime;
+      console.log(`[AI EVALUATION] Stopped (Natural Completion). Depth reached: ${bgAiMaxDepth}. Positions Evaluated: ${data.nodesTotal}. Elapsed time: ${elapsed}ms.`);
+      bgAiMoveResolve(data.move);
+      bgAiMoveResolve = null;
     }
   }
+};
 
-  // ── LEVEL 1: EASY — mostly random, sometimes greedy ──
-  if (aiDepth === 1) {
-    // 60% random, 40% greedy (pick best immediate gain)
-    if (Math.random() < 0.6) {
-      return validMoves[Math.floor(Math.random() * validMoves.length)];
-    }
-    // Greedy: pick move with best immediate AI gain (no defense)
-    let bestMove = validMoves[0], bestGain = -Infinity;
-    for (const move of validMoves) {
-      const sim = executeTurnSim(b, s, 'opp', move);
-      const gain = sim.scores.opp - s.opp;
-      if (gain > bestGain) { bestGain = gain; bestMove = move; }
-    }
-    return bestMove;
-  }
+// Start AI computation in the background thread
+function computeAiMoveAsync(boardState, scoresState, deadPitsState, timeBudget) {
+  return new Promise(resolve => {
+    bgAiMoveResolve = resolve;
+    bgAiCurrentBestMove = -1;
+    bgAiMaxDepth = 0;
+    bgAiStartTime = Date.now();
+    console.log(`[AI EVALUATION] Started... Time Budget: ${timeBudget}ms.`);
+    aiWorker.postMessage({
+      type: 'compute',
+      board: boardState,
+      scores: scoresState,
+      deadPits: deadPitsState,
+      depth: aiDepth,
+      timeBudget: timeBudget
+    });
+  });
+}
 
-  // ── LEVEL 2: MEDIUM — greedy with opponent awareness ──
-  if (aiDepth === 2) {
-    // 80% smart play, 20% random to keep it beatable
-    if (Math.random() < 0.2) {
-      return validMoves[Math.floor(Math.random() * validMoves.length)];
-    }
-
-    const scored = [];
-    for (const move of validMoves) {
-      const sim = executeTurnSim(b, s, 'opp', move);
-      const aiGains = sim.scores.opp - s.opp;
-      const playerGains = sim.scores.player - s.player;
-
-      // Look at opponent's best response
-      const playerMoves = getValidMoves(sim.board, 'player');
-      let maxPlayerResponse = 0;
-      for (const pm of playerMoves) {
-        const sim2 = executeTurnSim(sim.board, sim.scores, 'player', pm);
-        const pg = sim2.scores.player - sim.scores.player;
-        if (pg > maxPlayerResponse) maxPlayerResponse = pg;
+// Synchronously abort the worker when time is strictly up, using the best move found
+function abortAiWorker() {
+  if (bgAiMoveResolve) {
+    const elapsed = Date.now() - bgAiStartTime;
+    console.log(`[AI EVALUATION] Stopped (Strict Timeout). Depth reached: ${bgAiMaxDepth}. Elapsed time: ${elapsed}ms.`);
+    const resolveCb = bgAiMoveResolve;
+    bgAiMoveResolve = null;
+    
+    // Terminate worker rigidly to stop all calculations
+    aiWorker.terminate();
+    // Recreate worker for future turns
+    aiWorker = new Worker(aiWorkerUrl);
+    aiWorker.onmessage = function(e) {
+      const data = e.data;
+      if (data.type === 'progress') {
+        bgAiCurrentBestMove = data.move;
+        bgAiMaxDepth = data.depth;
+      } else if (data.type === 'result') {
+        if (bgAiMoveResolve) {
+          const elapsed2 = Date.now() - bgAiStartTime;
+          console.log(`[AI EVALUATION] Stopped (Natural Completion). Depth reached: ${bgAiMaxDepth}. Positions Evaluated: ${data.nodesTotal}. Elapsed time: ${elapsed2}ms.`);
+          bgAiMoveResolve(data.move);
+          bgAiMoveResolve = null;
+        }
       }
-
-      const diff = aiGains - Math.max(playerGains, maxPlayerResponse);
-      scored.push({ move, diff });
-    }
-
-    shuffleArray(scored); // Break ties randomly
-    scored.sort((a, b) => b.diff - a.diff);
-    return scored[0].move;
+    };
+    
+    resolveCb(bgAiCurrentBestMove);
   }
+}
 
-  // ── LEVEL 3: HARD — Time-bounded Iterative Deepening Minimax ──
-  return getBestMoveHard(b, s);
+// Main AI move selector fallback (only for simple instantaneous turns if needed)
+function getBestAiMoveFallback() {
+  const validMoves = [];
+  for (let i = 0; i < PITS_PER_SIDE; i++) {
+    if (board.opp[i] > 0) validMoves.push(i);
+  }
+  if (validMoves.length === 0) return -1;
+  return validMoves[Math.floor(Math.random() * validMoves.length)];
 }
 
 // ─── Pre-computation: start AI analysis during opponent's animation ───
-function startAiPreComputation(playerPitIdx) {
-  preComputedAiMove = null;
-  if (gameMode !== 'single' || aiDepth < 2) return; // Only pre-compute for Medium+ in single player
+let bgComputationPromise = null;
+let bgComputationTimeoutId = null;
 
-  // Simulate the player's move to get the resulting board state
-  const futureState = executeTurnSim(board, scores, 'player', playerPitIdx);
+function startAiBgComputation(futureState, expectedAnimTimeMs) {
+  if (gameMode !== 'single') return;
 
-  // Check if AI has valid moves in the future state
-  const futureAiMoves = getValidMoves(futureState.board, 'opp');
-  if (futureAiMoves.length === 0) return;
-
-  // Check if the game would end after player's move
-  const playerTotal = futureState.board.player.reduce((a, b) => a + b, 0);
-  const oppTotal = futureState.board.opp.reduce((a, b) => a + b, 0);
-  if (playerTotal === 0 || oppTotal === 0) return;
-
-  // Start computing AI's best move against the future board state
-  // This runs immediately (synchronously) but the result is stored for later use
-  aiMoveStartTime = Date.now();
-  try {
-    preComputedAiMove = getBestAiMove(futureState.board, futureState.scores);
-  } catch(e) {
-    preComputedAiMove = null; // Fallback: recompute later
-  }
+  // The strict rule: Total allowed thinking time = Animation Duration + 5 seconds
+  const totalBudget = expectedAnimTimeMs + 5000;
+  
+  bgComputationPromise = computeAiMoveAsync(futureState.board, futureState.scores, deadPits, totalBudget);
+  
+  // Set up the strict kill-switch
+  bgComputationTimeoutId = setTimeout(() => {
+    abortAiWorker();
+  }, totalBudget);
 }
+
 
 // ═══════════════════════════════════════════════
 //  TURN FLOW
@@ -2843,6 +2957,13 @@ async function endTurn() {
     isAiTurn = false;
     renderTurn();
     boardStateHistory = []; // Reset history
+    
+    // Clear any AI worker computations if the round has ended
+    if (bgComputationTimeoutId) {
+      clearTimeout(bgComputationTimeoutId);
+      abortAiWorker(); 
+    }
+    
     await sleep(500);
 
     // Calculate each player's total grains (scored + banked from previous rounds)
@@ -2944,6 +3065,12 @@ async function forceEndRound(message) {
   renderTurn();
   setStatus(message);
   boardStateHistory = [];
+  
+  if (bgComputationTimeoutId) {
+    clearTimeout(bgComputationTimeoutId);
+    abortAiWorker(); 
+  }
+  
   await sleep(500);
 
   const playerTotalGrains = scores.player + bankedGrains.player;
@@ -2961,50 +3088,63 @@ async function aiTurn(saveSnapshot = true) {
   
   if (saveSnapshot) saveUndoSnapshot();
 
-  let move;
-  
-  // Phase 1: AI Thinking (1.5s)
+  let move = -1;
   document.body.classList.add('ai-thinking');
   setStatus('');
   document.getElementById('turnDot').style.display = 'none';
-  await sleep(AI_THINK_MS);
   
-  // Compute the move
-  if (preComputedAiMove !== null && preComputedAiMove !== -1) {
-    if (board.opp[preComputedAiMove] > 0) {
-      move = preComputedAiMove;
-    } else {
-      move = getBestAiMove();
-    }
-    preComputedAiMove = null;
+  // Phase 1: Wait for AI.
+  // The strictly enforced timeout will abort the promise inside wait if time runs out.
+  if (bgComputationPromise) {
+    setStatus('AI is thinking...');
+    move = await bgComputationPromise;
   } else {
-    move = getBestAiMove();
+    // If for some reason we didn't start bg computation (e.g. first move of the game)
+    // We launch it now with exactly 5 seconds budget.
+    startAiBgComputation({board: board, scores: scores}, 0);
+    move = await bgComputationPromise;
+  }
+  
+  // Clear the promise and timeout since it has resolved.
+  bgComputationPromise = null;
+  if (bgComputationTimeoutId) {
+    clearTimeout(bgComputationTimeoutId);
+    bgComputationTimeoutId = null;
   }
   
   document.body.classList.remove('ai-thinking');
   document.getElementById('turnDot').style.display = 'block';
 
-  if (move === -1) {
-    isPlayerTurn = true;
-    isAnimating = false;
-    isAiTurn = false;
-    renderAll();
-    updateUndoButton();
-    return;
+  // Fallback if AI found no moves (e.g. invalid state)
+  if (move === -1 || board.opp[move] === 0) {
+    move = getBestAiMoveFallback();
+    if (move === -1) {
+      isPlayerTurn = true;
+      isAnimating = false;
+      isAiTurn = false;
+      renderAll();
+      updateUndoButton();
+      return;
+    }
   }
 
-  // Phase 2: Indicate the chosen pit (2s pulsing highlight)
+  // Phase 2: Indicate the chosen pit (strictly NO mathematical calculation here per rules)
   const chosenPitEl = document.getElementById(`pit-opp-${move}`);
   if (chosenPitEl) chosenPitEl.classList.add('ai-pit-indicator');
   setStatus(`AI choosing pit ${move + 1}...`);
   await sleep(AI_INDICATE_MS);
   if (chosenPitEl) chosenPitEl.classList.remove('ai-pit-indicator');
 
-  // Phase 3: Pre-distribution pause (1.5s)
+  // Phase 3: Execute the turn with AI-specific grain timing
   setStatus(`AI plays pit ${move + 1}`);
-  await sleep(AI_PRE_DIST_MS);
 
-  // Phase 4: Execute the turn with AI-specific grain timing
+  if (move !== -1 && board.opp[move] > 0) {
+    // Quick sim to see expected grains for this specific turn
+    const sim = executeTurnSim(board, scores, 'opp', move);
+    const expectedCapture = sim.scores.opp - scores.opp;
+    console.log(`[AI MOVE] Selects Pit ${move + 1}. Expected immediate grain capture: ${expectedCapture}`);
+  }
+
   await executeTurn('opp', move, true);
   await endTurn();
 }
@@ -3026,10 +3166,75 @@ async function playerTurnFlow(idx) {
   updateClickable();
   updateUndoButton();
 
-  // Pre-compute AI's response while player's animation plays
-  // Only for Easy/Medium (instant computation). Hard mode computes after animation.
-  if (gameMode === 'single' && aiDepth <= 2) {
-    startAiPreComputation(idx);
+  // In order to start the background calculation, we need to know the future state
+  // and the estimated animation time.
+  if (gameMode === 'single') {
+    // A quick local simulation function just to find the future board state
+    // (A copy of the sim function to run quickly on the main thread)
+    function quickSim(side, pitIdx) {
+      const b = { opp: [...board.opp], player: [...board.player] };
+      const s = { player: scores.player, opp: scores.opp };
+      function toLinear(sd, id) { return sd === 'player' ? id : 7 + (6 - id); }
+      function fromLinear(lin) {
+        lin = ((lin % 14) + 14) % 14;
+        if (lin < 7) return { sd: 'player', id: lin };
+        return { sd: 'opp', id: 6 - (lin - 7) };
+      }
+      function nextLive(cur) {
+        let steps = 0, n = cur;
+        do {
+          n = (n + 1) % 14;
+          steps++;
+          const p = fromLinear(n);
+          if (!deadPits[p.sd][p.id]) return n;
+        } while (steps < 14);
+        return (cur + 1) % 14;
+      }
+
+      let handGrains = b[side][pitIdx];
+      b[side][pitIdx] = 0;
+      let currLin = toLinear(side, pitIdx);
+      let loops = 0;
+      let totalGrainsMoved = 0;
+
+      while (true) {
+        if (++loops > 1000) break;
+        totalGrainsMoved += handGrains; // Track how many grains we simulate moving
+        while (handGrains > 0) {
+          currLin = nextLive(currLin);
+          const p = fromLinear(currLin);
+          b[p.sd][p.id]++;
+          handGrains--;
+          if (b[p.sd][p.id] === 4) { s[p.sd] += 4; b[p.sd][p.id] = 0; }
+        }
+        const nextLin = nextLive(currLin);
+        const n = fromLinear(nextLin);
+        if (b[n.sd][n.id] > 0) {
+          handGrains = b[n.sd][n.id];
+          b[n.sd][n.id] = 0;
+          currLin = nextLin;
+        } else {
+          const capLin = nextLive(nextLin);
+          const c = fromLinear(capLin);
+          if (b[c.sd][c.id] > 0) { s[side] += b[c.sd][c.id]; b[c.sd][c.id] = 0; }
+          break;
+        }
+      }
+      return { board: b, scores: s, totalGrainsMoved };
+    }
+    
+    // Run quick sim to figure out the future state and how many total grains fall
+    const futureResult = quickSim('player', idx);
+    
+    // Mathematical Expected Animation Time Calculation:
+    // GRAIN_FLY_MS = 1000ms. It waits GRAIN_STAGGER_MS (1000ms) between grains.
+    // Plus ANIM_PICK_MS (500) jumping out of pit.
+    const expectedAnimMs = ANIM_PICK_MS + (futureResult.totalGrainsMoved * GRAIN_STAGGER_MS);
+    
+    console.log(`Estimated animation time: ${expectedAnimMs/1000}s. AI gets this + 5s background time.`);
+    
+    // Start Web Worker immediately
+    startAiBgComputation({ board: futureResult.board, scores: futureResult.scores }, expectedAnimMs);
   }
 
   await executeTurn('player', idx, true);
